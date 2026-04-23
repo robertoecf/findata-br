@@ -5,6 +5,7 @@ from __future__ import annotations
 
 def test_ensure_sa_adds_suffix() -> None:
     import pytest
+
     pytest.importorskip("yfinance")
     from findata.sources.b3.quotes import _ensure_sa
 

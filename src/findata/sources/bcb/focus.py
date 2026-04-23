@@ -14,10 +14,21 @@ from findata.http_client import get_json
 BASE_URL = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata"
 
 FOCUS_INDICATORS = [
-    "IPCA", "IGP-DI", "IGP-M", "INPC", "IPA-DI", "IPA-M",
-    "Câmbio", "PIB Total", "Produção industrial", "Selic",
-    "Taxa de desocupação", "Balança comercial", "Conta corrente",
-    "Investimento direto no país", "Dívida líquida do setor público",
+    "IPCA",
+    "IGP-DI",
+    "IGP-M",
+    "INPC",
+    "IPA-DI",
+    "IPA-M",
+    "Câmbio",
+    "PIB Total",
+    "Produção industrial",
+    "Selic",
+    "Taxa de desocupação",
+    "Balança comercial",
+    "Conta corrente",
+    "Investimento direto no país",
+    "Dívida líquida do setor público",
 ]
 
 
@@ -26,9 +37,7 @@ def _validate_indicator(indicator: str) -> str:
     for known in FOCUS_INDICATORS:
         if known.upper() == indicator.upper():
             return known
-    raise ValueError(
-        f"Unknown indicator '{indicator}'. Available: {', '.join(FOCUS_INDICATORS)}"
-    )
+    raise ValueError(f"Unknown indicator '{indicator}'. Available: {', '.join(FOCUS_INDICATORS)}")
 
 
 _COERCE = ConfigDict(coerce_numbers_to_str=True)
@@ -73,16 +82,26 @@ def _parse_odata(raw: dict[str, Any], model: type[M], mapping: dict[str, str]) -
 
 
 _EXPECTATION_MAP = {
-    "indicador": "Indicador", "data": "Data",
-    "data_referencia": "DataReferencia", "media": "Media",
-    "mediana": "Mediana", "desvio_padrao": "DesvioPadrao",
-    "minimo": "Minimo", "maximo": "Maximo",
-    "numero_respondentes": "numeroRespondentes", "base_calculo": "baseCalculo",
+    "indicador": "Indicador",
+    "data": "Data",
+    "data_referencia": "DataReferencia",
+    "media": "Media",
+    "mediana": "Mediana",
+    "desvio_padrao": "DesvioPadrao",
+    "minimo": "Minimo",
+    "maximo": "Maximo",
+    "numero_respondentes": "numeroRespondentes",
+    "base_calculo": "baseCalculo",
 }
 
 _SELIC_MAP = {
-    "indicador": "Indicador", "data": "Data", "reuniao": "Reuniao",
-    "media": "Media", "mediana": "Mediana", "minimo": "Minimo", "maximo": "Maximo",
+    "indicador": "Indicador",
+    "data": "Data",
+    "reuniao": "Reuniao",
+    "media": "Media",
+    "mediana": "Mediana",
+    "minimo": "Minimo",
+    "maximo": "Maximo",
 }
 
 
@@ -90,13 +109,20 @@ _SELIC_MAP = {
 
 
 async def _fetch_expectations(
-    endpoint: str, indicator: str, top: int,
+    endpoint: str,
+    indicator: str,
+    top: int,
 ) -> list[FocusExpectation]:
     safe = _validate_indicator(indicator)
-    raw = await get_json(f"{BASE_URL}/{endpoint}", {
-        "$top": str(top), "$format": "json",
-        "$orderby": "Data desc", "$filter": f"Indicador eq '{safe}'",
-    })
+    raw = await get_json(
+        f"{BASE_URL}/{endpoint}",
+        {
+            "$top": str(top),
+            "$format": "json",
+            "$orderby": "Data desc",
+            "$filter": f"Indicador eq '{safe}'",
+        },
+    )
     return _parse_odata(raw, FocusExpectation, _EXPECTATION_MAP)
 
 
@@ -117,7 +143,12 @@ async def get_focus_top5_annual(indicator: str = "IPCA", top: int = 20) -> list[
 
 async def get_focus_selic(top: int = 20) -> list[FocusSelic]:
     """Selic expectations per COPOM meeting."""
-    raw = await get_json(f"{BASE_URL}/ExpectativasMercadoSelic", {
-        "$top": str(top), "$format": "json", "$orderby": "Data desc",
-    })
+    raw = await get_json(
+        f"{BASE_URL}/ExpectativasMercadoSelic",
+        {
+            "$top": str(top),
+            "$format": "json",
+            "$orderby": "Data desc",
+        },
+    )
     return _parse_odata(raw, FocusSelic, _SELIC_MAP)

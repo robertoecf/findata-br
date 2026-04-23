@@ -26,6 +26,7 @@ def test_sgs_parse_skips_invalid_rows() -> None:
 def test_sgs_get_series_by_name_unknown_raises() -> None:
     with pytest.raises(ValueError, match="Unknown series"):
         import asyncio
+
         asyncio.run(sgs.get_series_by_name("nonexistent-series"))
 
 

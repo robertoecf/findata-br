@@ -42,10 +42,15 @@ def _float(val: str) -> float | None:
         return None
 
 
+_DATE_PARTS = 3  # day / month / year
+
+
 def _date_br(val: str) -> str:
     """DD/MM/YYYY → YYYY-MM-DD."""
     parts = val.strip().split("/")
-    return f"{parts[2]}-{parts[1]}-{parts[0]}" if len(parts) == 3 else val
+    if len(parts) != _DATE_PARTS:
+        return val
+    return f"{parts[2]}-{parts[1]}-{parts[0]}"
 
 
 # Parsed-data cache (avoids re-parsing ~170k rows on every call)
@@ -65,17 +70,19 @@ async def _fetch_all() -> list[TreasuryBond]:
     for row in reader:
         tipo = row.get("Tipo Titulo", "")
         venc = _date_br(row.get("Data Vencimento", ""))
-        results.append(TreasuryBond(
-            tipo=tipo,
-            titulo=f"{tipo} {venc[:4]}".strip(),
-            dt_vencimento=venc,
-            dt_base=_date_br(row.get("Data Base", "")),
-            taxa_compra=_float(row.get("Taxa Compra Manha", "")),
-            taxa_venda=_float(row.get("Taxa Venda Manha", "")),
-            pu_compra=_float(row.get("PU Compra Manha", "")),
-            pu_venda=_float(row.get("PU Venda Manha", "")),
-            pu_base=_float(row.get("PU Base Manha", "")),
-        ))
+        results.append(
+            TreasuryBond(
+                tipo=tipo,
+                titulo=f"{tipo} {venc[:4]}".strip(),
+                dt_vencimento=venc,
+                dt_base=_date_br(row.get("Data Base", "")),
+                taxa_compra=_float(row.get("Taxa Compra Manha", "")),
+                taxa_venda=_float(row.get("Taxa Venda Manha", "")),
+                pu_compra=_float(row.get("PU Compra Manha", "")),
+                pu_venda=_float(row.get("PU Venda Manha", "")),
+                pu_base=_float(row.get("PU Base Manha", "")),
+            )
+        )
 
     _parsed = results
     _parsed_at = time.time()
@@ -88,7 +95,9 @@ def _filter_by_text(items: list[TreasuryBond], field: str, query: str) -> list[T
 
 
 def _filter_by_dates(
-    items: list[TreasuryBond], start: date | None, end: date | None,
+    items: list[TreasuryBond],
+    start: date | None,
+    end: date | None,
 ) -> list[TreasuryBond]:
     if start:
         s = start.isoformat()
@@ -114,7 +123,9 @@ async def get_treasury_bonds(
 
 
 async def get_bond_history(
-    titulo: str, start: date | None = None, end: date | None = None,
+    titulo: str,
+    start: date | None = None,
+    end: date | None = None,
 ) -> list[TreasuryBond]:
     """Get price/rate history for a specific bond by title substring."""
     bonds = _filter_by_text(await _fetch_all(), "titulo", titulo)

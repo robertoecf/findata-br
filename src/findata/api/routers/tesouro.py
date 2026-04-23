@@ -13,9 +13,7 @@ router = APIRouter(prefix="/tesouro", tags=["Tesouro Direto"])
 
 @router.get("/bonds")
 async def list_bonds(
-    tipo: str | None = Query(
-        default=None, description="Bond type filter (e.g., 'Tesouro IPCA+')"
-    ),
+    tipo: str | None = Query(default=None, description="Bond type filter (e.g., 'Tesouro IPCA+')"),
     start: date | None = Query(default=None, description="Start date"),
     end: date | None = Query(default=None, description="End date"),
     limit: int = Query(default=500, ge=1, le=5000),

@@ -12,6 +12,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/b3", tags=["B3 - Bolsa"])
 
+_MAX_TICKERS_PER_REQUEST = 20
+
 
 def _quotes() -> Any:
     try:
@@ -67,8 +69,11 @@ async def get_multiple_quotes(
     ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
     if not ticker_list:
         raise HTTPException(status_code=400, detail="At least one ticker is required")
-    if len(ticker_list) > 20:
-        raise HTTPException(status_code=400, detail="Max 20 tickers per request")
+    if len(ticker_list) > _MAX_TICKERS_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Max {_MAX_TICKERS_PER_REQUEST} tickers per request",
+        )
     try:
         return await quotes.get_multiple_quotes(ticker_list)
     except HTTPException:

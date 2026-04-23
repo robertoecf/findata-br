@@ -21,9 +21,21 @@ _ASCII = r"""
 
 # Brazil-flag-inspired gradient: green → yellow → blue
 _GRADIENT = [
-    "#009c3b", "#0ea848", "#2db84f", "#55c258", "#8bcf5a",
-    "#ffd400", "#ffe100", "#ffee00", "#ffd400", "#f5b400",
-    "#3a8fe0", "#2a7fd5", "#1a6fd0", "#0a5fc5", "#002776",
+    "#009c3b",
+    "#0ea848",
+    "#2db84f",
+    "#55c258",
+    "#8bcf5a",
+    "#ffd400",
+    "#ffe100",
+    "#ffee00",
+    "#ffd400",
+    "#f5b400",
+    "#3a8fe0",
+    "#2a7fd5",
+    "#1a6fd0",
+    "#0a5fc5",
+    "#002776",
 ]
 
 

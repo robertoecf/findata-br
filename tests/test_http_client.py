@@ -43,6 +43,7 @@ def test_cache_evicts_expired_entries() -> None:
     http_client._cache_set("k", "v", ttl=0)
     # Sleep a hair to cross the ttl boundary
     import time
+
     time.sleep(0.01)
     assert http_client._cache_get("k") is None
 
@@ -71,7 +72,9 @@ def test_should_retry_classifies_errors() -> None:
 
     resp_404 = httpx.Response(status_code=404)
     exc_404 = httpx.HTTPStatusError(
-        "x", request=httpx.Request("GET", "http://x"), response=resp_404,
+        "x",
+        request=httpx.Request("GET", "http://x"),
+        response=resp_404,
     )
     assert http_client._should_retry(exc_404) is False
 

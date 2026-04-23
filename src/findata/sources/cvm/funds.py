@@ -13,9 +13,7 @@ from pydantic import BaseModel
 from findata.sources.cvm.parser import fetch_csv, fetch_csv_from_zip
 
 FUND_CATALOG_URL = "https://dados.cvm.gov.br/dados/FI/CAD/DADOS/cad_fi.csv"
-FUND_DAILY_URL = (
-    "https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/inf_diario_fi_{ym}.zip"
-)
+FUND_DAILY_URL = "https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/inf_diario_fi_{ym}.zip"
 
 
 class Fund(BaseModel):
@@ -63,20 +61,22 @@ async def _load_catalog() -> list[Fund]:
             pl = float(pl_str) if pl_str else None
         except ValueError:
             pl = None
-        results.append(Fund(
-            cnpj=row.get("CNPJ_FUNDO", ""),
-            nome=row.get("DENOM_SOCIAL", ""),
-            classe=row.get("CLASSE", ""),
-            situacao=row.get("SIT", ""),
-            tipo=row.get("TP_FUNDO", ""),
-            fundo_cotas=row.get("FUNDO_COTAS", ""),
-            exclusivo=row.get("FUNDO_EXCLUSIVO", ""),
-            patrimonio_liquido=pl,
-            taxa_admin=row.get("TAXA_ADM", ""),
-            gestor=row.get("GESTOR", ""),
-            administrador=row.get("ADMIN", ""),
-            classe_anbima=row.get("CLASSE_ANBIMA", ""),
-        ))
+        results.append(
+            Fund(
+                cnpj=row.get("CNPJ_FUNDO", ""),
+                nome=row.get("DENOM_SOCIAL", ""),
+                classe=row.get("CLASSE", ""),
+                situacao=row.get("SIT", ""),
+                tipo=row.get("TP_FUNDO", ""),
+                fundo_cotas=row.get("FUNDO_COTAS", ""),
+                exclusivo=row.get("FUNDO_EXCLUSIVO", ""),
+                patrimonio_liquido=pl,
+                taxa_admin=row.get("TAXA_ADM", ""),
+                gestor=row.get("GESTOR", ""),
+                administrador=row.get("ADMIN", ""),
+                classe_anbima=row.get("CLASSE_ANBIMA", ""),
+            )
+        )
     _catalog = results
     _catalog_at = time.time()
     return results

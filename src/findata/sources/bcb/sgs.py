@@ -17,16 +17,25 @@ BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
 SERIES_CATALOG: dict[str, dict[str, Any]] = {
     "selic": {"code": 432, "name": "Taxa Selic", "unit": "% a.a.", "freq": "diária"},
     "selic_meta": {
-        "code": 4189, "name": "Taxa Selic Meta", "unit": "% a.a.", "freq": "diária",
+        "code": 4189,
+        "name": "Taxa Selic Meta",
+        "unit": "% a.a.",
+        "freq": "diária",
     },
     "cdi": {"code": 12, "name": "Taxa CDI", "unit": "% a.a.", "freq": "diária"},
     "cdi_acum_mensal": {
-        "code": 4389, "name": "CDI acumulado mensal", "unit": "%", "freq": "mensal",
+        "code": 4389,
+        "name": "CDI acumulado mensal",
+        "unit": "%",
+        "freq": "mensal",
     },
     "tr": {"code": 226, "name": "Taxa Referencial (TR)", "unit": "%", "freq": "diária"},
     "ipca": {"code": 433, "name": "IPCA mensal", "unit": "%", "freq": "mensal"},
     "ipca_12m": {
-        "code": 13522, "name": "IPCA acumulado 12 meses", "unit": "%", "freq": "mensal",
+        "code": 13522,
+        "name": "IPCA acumulado 12 meses",
+        "unit": "%",
+        "freq": "mensal",
     },
     "ipca_15": {"code": 7478, "name": "IPCA-15", "unit": "%", "freq": "mensal"},
     "igpm": {"code": 189, "name": "IGP-M mensal", "unit": "%", "freq": "mensal"},
@@ -35,15 +44,23 @@ SERIES_CATALOG: dict[str, dict[str, Any]] = {
     "dolar_ptax": {"code": 1, "name": "Dólar PTAX venda", "unit": "BRL/USD", "freq": "diária"},
     "euro": {"code": 21619, "name": "Euro PTAX venda", "unit": "BRL/EUR", "freq": "diária"},
     "pib_mensal": {
-        "code": 4380, "name": "PIB mensal (IBC-Br)", "unit": "índice", "freq": "mensal",
+        "code": 4380,
+        "name": "PIB mensal (IBC-Br)",
+        "unit": "índice",
+        "freq": "mensal",
     },
     "desemprego": {
-        "code": 24369, "name": "Taxa de desocupação (PNAD)", "unit": "%", "freq": "mensal",
+        "code": 24369,
+        "name": "Taxa de desocupação (PNAD)",
+        "unit": "%",
+        "freq": "mensal",
     },
     "poupanca": {"code": 195, "name": "Rendimento poupança", "unit": "%", "freq": "mensal"},
     "divida_pib": {
-        "code": 4513, "name": "Dívida líquida setor público / PIB",
-        "unit": "%", "freq": "mensal",
+        "code": 4513,
+        "name": "Dívida líquida setor público / PIB",
+        "unit": "%",
+        "freq": "mensal",
     },
 }
 
@@ -64,7 +81,9 @@ def _parse(raw: list[dict[str, str]]) -> list[SGSDataPoint]:
 
 
 async def get_series(
-    code: int, start: date | None = None, end: date | None = None,
+    code: int,
+    start: date | None = None,
+    end: date | None = None,
 ) -> list[SGSDataPoint]:
     """Fetch a BCB time series by code with optional date range."""
     url = BASE_URL.format(code=code)
@@ -85,7 +104,5 @@ async def get_series_last(code: int, n: int = 10) -> list[SGSDataPoint]:
 async def get_series_by_name(name: str, n: int = 10) -> list[SGSDataPoint]:
     """Fetch series by catalog name (e.g., 'selic', 'ipca', 'dolar_ptax')."""
     if name not in SERIES_CATALOG:
-        raise ValueError(
-            f"Unknown series '{name}'. Available: {', '.join(sorted(SERIES_CATALOG))}"
-        )
+        raise ValueError(f"Unknown series '{name}'. Available: {', '.join(sorted(SERIES_CATALOG))}")
     return await get_series_last(SERIES_CATALOG[name]["code"], n)

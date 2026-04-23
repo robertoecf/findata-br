@@ -15,7 +15,8 @@ async def fetch_csv(url: str) -> list[dict[str, str]]:
 
 
 async def fetch_csv_from_zip(
-    url: str, filename_contains: str | None = None,
+    url: str,
+    filename_contains: str | None = None,
 ) -> list[dict[str, str]]:
     raw = await get_bytes(url)
     results: list[dict[str, str]] = []

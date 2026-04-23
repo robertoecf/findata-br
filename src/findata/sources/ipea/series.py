@@ -81,11 +81,13 @@ def _parse_values(raw: dict[str, Any]) -> list[IPEADataPoint]:
             valor_f = float(valor) if valor is not None else None
         except (TypeError, ValueError):
             valor_f = None
-        results.append(IPEADataPoint(
-            sercodigo=item.get("SERCODIGO", ""),
-            data=item.get("VALDATA", ""),
-            valor=valor_f,
-        ))
+        results.append(
+            IPEADataPoint(
+                sercodigo=item.get("SERCODIGO", ""),
+                data=item.get("VALDATA", ""),
+                valor=valor_f,
+            )
+        )
     return results
 
 

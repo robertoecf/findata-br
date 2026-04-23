@@ -77,6 +77,37 @@ Status: **v0.1.0 — alpha, release-ready for local/self-hosted use.**
 - **Webhooks / streaming** — SSE for "give me the new PTAX the moment BCB
   publishes it".
 
+## 📚 Lessons from adjacent projects
+
+### From [Tpessia/dados-findanceiros](https://github.com/Tpessia/dados-financeiros) (TS/NestJS, BR)
+
+Already absorbed:
+
+- ✅ **IPEA Data (OData v4)** — unique macro series with 1940s+ history, ported in v0.1.0.
+- ❌ **Tesouro Direto D0 JSON** — endpoint has been retired (HTTP 410).
+- ❌ **BCB SGS duplicates** — already covered, no action.
+
+### From [gprossignoli/findata](https://github.com/gprossignoli/findata) (Python, global)
+
+Student project, inactive, sync `requests`/RabbitMQ/MongoDB — most of the stack
+is in the opposite direction of ours (async httpx + FastAPI + MCP). But two
+ideas are worth copying:
+
+- ✅ **Per-source top-level packages.** Our `src/findata/sources/<source>/`
+  already follows this; codified in [CONTRIBUTING.md](CONTRIBUTING.md).
+- ✅ **`*_adapter.py` naming for external deps.** Consider renaming internal
+  clients (e.g., future `yfinance_adapter.py`, `anbima_adapter.py`) to make
+  the boundary explicit and greppable. Low-priority refactor.
+- 🟡 **Use-cases as classes.** Not critical today (our functions are already
+  tiny), but if a flow grows to orchestrate multiple adapters it should
+  graduate into a `UseCase` class so CLI / HTTP / MCP can all reuse it.
+- ❌ **Clean-Architecture three-folder ceremony** (`domain/application/
+  infraestructure/`). Overkill for stateless wrappers — skip.
+- ❌ **APScheduler / RabbitMQ / MongoDB.** A library shouldn't embed a
+  scheduler or a broker; let callers (cron, Airflow, GH Actions) drive it.
+- ❌ **yfinance fork.** They fork to fix non-US tickers; we already use
+  mainline yfinance for B3 without modification.
+
 ## 🧪 Known caveats
 
 - **CVM financial statements (DFP/ITR)** download a multi-hundred-MB ZIP for a

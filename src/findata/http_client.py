@@ -68,10 +68,14 @@ def _build_url(url: str, params: dict[str, Any] | None) -> str:
 
 # ── Retry ─────────────────────────────────────────────────────────
 
+_HTTP_INTERNAL_ERROR = 500  # lowest 5xx status code
+_HTTP_TOO_MANY_REQUESTS = 429
+
 
 def _should_retry(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code >= 500 or exc.response.status_code == 429
+        status = exc.response.status_code
+        return status >= _HTTP_INTERNAL_ERROR or status == _HTTP_TOO_MANY_REQUESTS
     return isinstance(exc, httpx.TransportError)
 
 

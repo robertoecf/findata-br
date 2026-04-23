@@ -45,15 +45,20 @@ def _version_callback(value: bool) -> None:
 @app.callback()
 def _root(
     version: bool = typer.Option(
-        None, "--version", "-V", callback=_version_callback, is_eager=True,
+        None,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
         help="Show version and exit.",
     ),
 ) -> None:
-    _ = version  # handled by the eager callback above
     """findata-br — Brazilian financial data CLI."""
+    _ = version  # handled by the eager callback above
 
 
 # ── Banner ─────────────────────────────────────────────────────────
+
 
 @app.command()
 def banner() -> None:
@@ -143,8 +148,12 @@ def bcb_focus(
 
     for e in data:
         table.add_row(
-            e.data, e.data_referencia,
-            _fmt(e.mediana), _fmt(e.media), _fmt(e.minimo), _fmt(e.maximo),
+            e.data,
+            e.data_referencia,
+            _fmt(e.mediana),
+            _fmt(e.media),
+            _fmt(e.minimo),
+            _fmt(e.maximo),
         )
 
     rprint(table)
@@ -196,8 +205,12 @@ def b3_history(
 
     for p in data:
         table.add_row(
-            p.date, f"{p.open:.2f}", f"{p.high:.2f}",
-            f"{p.low:.2f}", f"{p.close:.2f}", f"{p.volume:,}",
+            p.date,
+            f"{p.open:.2f}",
+            f"{p.high:.2f}",
+            f"{p.low:.2f}",
+            f"{p.close:.2f}",
+            f"{p.volume:,}",
         )
 
     rprint(table)
@@ -246,8 +259,10 @@ def tesouro_history(
     for b in data[-n:]:
         table.add_row(
             b.dt_base,
-            _fmt(b.taxa_compra, ".4f"), _fmt(b.taxa_venda, ".4f"),
-            _fmt(b.pu_compra), _fmt(b.pu_venda),
+            _fmt(b.taxa_compra, ".4f"),
+            _fmt(b.taxa_venda, ".4f"),
+            _fmt(b.pu_compra),
+            _fmt(b.pu_venda),
         )
 
     rprint(table)
@@ -297,8 +312,11 @@ def ipea_catalog() -> None:
     table.add_column("Freq")
     for name, info in ipea_series.IPEA_CATALOG.items():
         table.add_row(
-            name, info["code"], info["description"],
-            info["unidade"], info["periodicidade"],
+            name,
+            info["code"],
+            info["description"],
+            info["unidade"],
+            info["periodicidade"],
         )
     rprint(table)
 
@@ -342,7 +360,10 @@ def ipea_search(
     table.add_column("Fonte")
     for m in results:
         table.add_row(
-            m.sercodigo, m.sernome[:60], m.serperiodicidade or "-", m.serfonte or "-",
+            m.sercodigo,
+            m.sernome[:60],
+            m.serperiodicidade or "-",
+            m.serfonte or "-",
         )
     rprint(table)
 
@@ -370,11 +391,12 @@ def cvm_search(
     table.add_column("Name")
     table.add_column("Situação", style="green")
     table.add_column("Setor")
-    for c in results[:50]:
+    max_shown = 50
+    for c in results[:max_shown]:
         table.add_row(c.cnpj, c.nome_comercial or c.nome_social, c.situacao, c.setor)
     rprint(table)
-    if len(results) > 50:
-        rprint(f"[dim](showing 50 of {len(results)} — refine your query)[/dim]")
+    if len(results) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(results)} — refine your query)[/dim]")
 
 
 # ── Serve command ──────────────────────────────────────────────────

@@ -49,24 +49,29 @@ def _parse(rows: list[dict[str, str]], cnpj: str | None) -> list[FinancialEntry]
             valor = float(r.get("VL_CONTA", "0"))
         except ValueError:
             valor = 0.0
-        results.append(FinancialEntry(
-            cnpj=r.get("CNPJ_CIA", ""),
-            nome_empresa=r.get("DENOM_CIA", ""),
-            cod_cvm=r.get("CD_CVM", ""),
-            dt_referencia=r.get("DT_REFER", ""),
-            versao=r.get("VERSAO", ""),
-            cod_conta=r.get("CD_CONTA", ""),
-            desc_conta=r.get("DS_CONTA", ""),
-            valor=valor,
-            moeda=r.get("MOEDA", "REAL"),
-            escala=r.get("ESCALA_MOEDA", "MIL"),
-        ))
+        results.append(
+            FinancialEntry(
+                cnpj=r.get("CNPJ_CIA", ""),
+                nome_empresa=r.get("DENOM_CIA", ""),
+                cod_cvm=r.get("CD_CVM", ""),
+                dt_referencia=r.get("DT_REFER", ""),
+                versao=r.get("VERSAO", ""),
+                cod_conta=r.get("CD_CONTA", ""),
+                desc_conta=r.get("DS_CONTA", ""),
+                valor=valor,
+                moeda=r.get("MOEDA", "REAL"),
+                escala=r.get("ESCALA_MOEDA", "MIL"),
+            )
+        )
     return results
 
 
 async def _fetch(
-    url_template: str, prefix: str,
-    year: int, statement: StatementType, cnpj: str | None,
+    url_template: str,
+    prefix: str,
+    year: int,
+    statement: StatementType,
+    cnpj: str | None,
 ) -> list[FinancialEntry]:
     url = url_template.format(year=year)
     rows = await fetch_csv_from_zip(url, f"{prefix}_{statement.value}_{year}")
@@ -74,7 +79,9 @@ async def _fetch(
 
 
 async def get_dfp(
-    year: int, statement: StatementType = StatementType.DRE_CON, cnpj: str | None = None,
+    year: int,
+    statement: StatementType = StatementType.DRE_CON,
+    cnpj: str | None = None,
 ) -> list[FinancialEntry]:
     """Fetch annual financial statements (DFP) from CVM.
 
@@ -84,7 +91,9 @@ async def get_dfp(
 
 
 async def get_itr(
-    year: int, statement: StatementType = StatementType.DRE_CON, cnpj: str | None = None,
+    year: int,
+    statement: StatementType = StatementType.DRE_CON,
+    cnpj: str | None = None,
 ) -> list[FinancialEntry]:
     """Fetch quarterly financial statements (ITR) from CVM."""
     return await _fetch(_ITR_URL, "itr_cia_aberta", year, statement, cnpj)
