@@ -54,6 +54,7 @@ async def get_companies(only_active: bool = True) -> list[Company]:
 
 
 async def search_company(query: str, only_active: bool = True) -> list[Company]:
+    """Case-insensitive substring search on social and commercial names."""
     q = query.upper()
     return [
         c for c in await get_companies(only_active)

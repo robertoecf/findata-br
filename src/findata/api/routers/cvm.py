@@ -28,7 +28,7 @@ async def list_companies(
     only_active: bool = Query(default=True),
     skip: int = Query(default=0, ge=0, description="Records to skip"),
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
-):
+) -> list[companies.Company]:
     """List all companies registered at CVM (paginated)."""
     return _page(await companies.get_companies(only_active), skip, limit)
 
@@ -37,7 +37,7 @@ async def list_companies(
 async def search_companies(
     q: str = Query(..., min_length=2, description="Search query"),
     only_active: bool = Query(default=True),
-):
+) -> list[companies.Company]:
     """Search companies by name."""
     return await companies.search_company(q, only_active)
 
@@ -52,7 +52,7 @@ async def get_dfp(
     cnpj: str | None = Query(default=None, description="Filter by CNPJ (recommended)"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=500, ge=1, le=5000),
-):
+) -> list[financials.FinancialEntry]:
     """Fetch annual financial statements (DFP) from CVM.
 
     Statement types: BPA_con, BPP_con, DRE_con, DFC_MI_con, DMPL_con, DVA_con
@@ -70,7 +70,7 @@ async def get_itr(
     cnpj: str | None = Query(default=None),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=500, ge=1, le=5000),
-):
+) -> list[financials.FinancialEntry]:
     """Fetch quarterly financial statements (ITR) from CVM."""
     return _page(await financials.get_itr(year, statement, cnpj), skip, limit)
 
@@ -84,7 +84,7 @@ async def list_funds(
     classe: str | None = Query(default=None, description="Filter by class"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=1000),
-):
+) -> list[funds.Fund]:
     """List all registered investment funds (paginated)."""
     return _page(await funds.get_fund_catalog(only_active, classe), skip, limit)
 
@@ -96,7 +96,7 @@ async def fund_daily(
     cnpj: str | None = Query(default=None, description="Filter by fund CNPJ (recommended)"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=500, ge=1, le=5000),
-):
+) -> list[funds.FundDaily]:
     """Fetch daily fund data (NAV, quota, flows) for a given month.
 
     **Tip**: Always pass `cnpj` to avoid loading the entire monthly file.

@@ -26,6 +26,9 @@ async def fetch_csv_from_zip(
             if filename_contains and filename_contains not in name:
                 continue
             with zf.open(name) as f:
-                reader = csv.DictReader(io.StringIO(f.read().decode("iso-8859-1")), delimiter=";")
+                reader = csv.DictReader(
+                    io.StringIO(f.read().decode("iso-8859-1")),
+                    delimiter=";",
+                )
                 results.extend(reader)
     return results

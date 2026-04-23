@@ -6,7 +6,8 @@ import asyncio
 import hashlib
 import time
 from collections import OrderedDict
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 from urllib.parse import quote
 
 import httpx
@@ -42,6 +43,11 @@ def _cache_set(key: str, data: Any, ttl: float = CACHE_TTL) -> None:
         _cache.popitem(last=False)
 
 
+def clear_cache() -> None:
+    """Clear the entire in-memory cache. Useful in tests."""
+    _cache.clear()
+
+
 # ── OData URL Builder ─────────────────────────────────────────────
 
 _ODATA_SAFE = "$'@/,()"
@@ -63,24 +69,29 @@ def _build_url(url: str, params: dict[str, Any] | None) -> str:
 # ── Retry ─────────────────────────────────────────────────────────
 
 
-def _should_retry(exc: Exception) -> bool:
+def _should_retry(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code >= 500 or exc.response.status_code == 429
     return isinstance(exc, httpx.TransportError)
 
 
-async def _retry_loop(fn, retries: int = 3) -> Any:  # type: ignore[no-untyped-def]
+T = TypeVar("T")
+
+
+async def _retry_loop(fn: Callable[[], Awaitable[T]], retries: int = 3) -> T:
     """Call async `fn()` with exponential backoff on retryable errors."""
-    last_exc: Exception | None = None
-    for attempt in range(max(retries, 1)):
+    attempts = max(retries, 1)
+    last_exc: BaseException | None = None
+    for attempt in range(attempts):
         try:
             return await fn()
         except Exception as exc:
             last_exc = exc
-            if not _should_retry(exc) or attempt >= retries - 1:
+            if not _should_retry(exc) or attempt >= attempts - 1:
                 break
             await asyncio.sleep(2**attempt)
-    raise last_exc  # type: ignore[misc]
+    assert last_exc is not None  # loop always runs at least once
+    raise last_exc
 
 
 # ── Shared Client (event-loop-aware) ──────────────────────────────
@@ -92,7 +103,7 @@ _client_loop_id: int | None = None
 def _get_client() -> httpx.AsyncClient:
     global _client, _client_loop_id
     try:
-        loop_id = id(asyncio.get_running_loop())
+        loop_id: int | None = id(asyncio.get_running_loop())
     except RuntimeError:
         loop_id = None
 
@@ -100,6 +111,7 @@ def _get_client() -> httpx.AsyncClient:
         _client = httpx.AsyncClient(
             timeout=30,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+            headers={"User-Agent": "findata-br/0.1 (+https://github.com/robertoecf/findata-br)"},
         )
         _client_loop_id = loop_id
     return _client
@@ -147,20 +159,24 @@ async def get_bytes(
     retries: int = 3,
     cache_ttl: int = CACHE_TTL,
 ) -> bytes:
-    """GET raw bytes with LRU cache and retry."""
+    """GET raw bytes (large downloads use a dedicated longer-timeout client)."""
     key = _cache_key(url, None)
     cached = _cache_get(key)
     if cached is not None:
+        assert isinstance(cached, bytes)
         return cached
 
-    async with httpx.AsyncClient(timeout=120) as dl_client:
+    async with httpx.AsyncClient(
+        timeout=120,
+        headers={"User-Agent": "findata-br/0.1 (+https://github.com/robertoecf/findata-br)"},
+    ) as dl_client:
 
         async def _do() -> bytes:
             resp = await dl_client.get(url)
             resp.raise_for_status()
             return resp.content
 
-        data = await _retry_loop(_do, retries)
+        data: bytes = await _retry_loop(_do, retries)
 
     _cache_set(key, data, cache_ttl)
     return data

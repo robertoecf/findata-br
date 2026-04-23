@@ -57,7 +57,7 @@ IBGE_INDICATORS: dict[str, dict[str, Any]] = {
 }
 
 # IPCA major groups (classificação 315)
-IPCA_GROUPS = {
+IPCA_GROUPS: dict[str, str] = {
     "7169": "Índice geral",
     "7170": "1.Alimentação e bebidas",
     "7445": "2.Habitação",
@@ -99,10 +99,7 @@ async def get_indicator(
     agregado = info["agregado"]
     variavel = info["variavel"]
 
-    url = (
-        f"{BASE_URL}/{agregado}/periodos/-{periods}"
-        f"/variaveis/{variavel}"
-    )
+    url = f"{BASE_URL}/{agregado}/periodos/-{periods}/variaveis/{variavel}"
     params = {"localidades": localidade}
 
     raw = await get_json(url, params, cache_ttl=3600)
@@ -126,10 +123,7 @@ async def get_ipca_breakdown(
         groups = list(IPCA_GROUPS.keys())
 
     group_str = ",".join(groups)
-    url = (
-        f"{BASE_URL}/7060/periodos/-{periods}"
-        f"/variaveis/63"
-    )
+    url = f"{BASE_URL}/7060/periodos/-{periods}/variaveis/63"
     params = {
         "localidades": "N1[all]",
         "classificacao": f"315[{group_str}]",
@@ -142,31 +136,30 @@ async def get_ipca_breakdown(
 def _parse_response(raw: Any) -> list[IBGEDataPoint]:
     """Parse IBGE Agregados API response.
 
-    The response format is complex:
-    [
-      {
-        "id": "63",
-        "variavel": "IPCA - Variação mensal",
-        "resultados": [
+    Response shape:
+        [
           {
-            "classificacoes": [...],
-            "series": [
+            "id": "63",
+            "variavel": "IPCA - Variação mensal",
+            "resultados": [
               {
-                "localidade": {"id": "1", "nome": "Brasil"},
-                "serie": {"202601": "0.56", "202602": "1.31", ...}
+                "classificacoes": [...],
+                "series": [
+                  {
+                    "localidade": {"id": "1", "nome": "Brasil"},
+                    "serie": {"202601": "0.56", "202602": "1.31", ...}
+                  }
+                ]
               }
             ]
           }
         ]
-      }
-    ]
     """
-    results = []
+    results: list[IBGEDataPoint] = []
     for var_block in raw:
         variavel_name = var_block.get("variavel", "")
         for resultado in var_block.get("resultados", []):
-            # Get classification name if present
-            classif_name = None
+            classif_name: str | None = None
             for classif in resultado.get("classificacoes", []):
                 for cat in classif.get("categoria", {}).values():
                     classif_name = cat

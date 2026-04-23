@@ -41,7 +41,7 @@ class FinancialEntry(BaseModel):
 
 
 def _parse(rows: list[dict[str, str]], cnpj: str | None) -> list[FinancialEntry]:
-    results = []
+    results: list[FinancialEntry] = []
     for r in rows:
         if cnpj and r.get("CNPJ_CIA", "") != cnpj:
             continue
@@ -76,10 +76,15 @@ async def _fetch(
 async def get_dfp(
     year: int, statement: StatementType = StatementType.DRE_CON, cnpj: str | None = None,
 ) -> list[FinancialEntry]:
+    """Fetch annual financial statements (DFP) from CVM.
+
+    Tip: always pass `cnpj` to avoid parsing the entire dataset.
+    """
     return await _fetch(_DFP_URL, "dfp_cia_aberta", year, statement, cnpj)
 
 
 async def get_itr(
     year: int, statement: StatementType = StatementType.DRE_CON, cnpj: str | None = None,
 ) -> list[FinancialEntry]:
+    """Fetch quarterly financial statements (ITR) from CVM."""
     return await _fetch(_ITR_URL, "itr_cia_aberta", year, statement, cnpj)

@@ -56,10 +56,13 @@ async def _load_catalog() -> list[Fund]:
         return _catalog
 
     rows = await fetch_csv(FUND_CATALOG_URL)
-    results = []
+    results: list[Fund] = []
     for row in rows:
         pl_str = row.get("VL_PATRIM_LIQ", "")
-        pl = float(pl_str) if pl_str else None
+        try:
+            pl = float(pl_str) if pl_str else None
+        except ValueError:
+            pl = None
         results.append(Fund(
             cnpj=row.get("CNPJ_FUNDO", ""),
             nome=row.get("DENOM_SOCIAL", ""),
@@ -108,12 +111,12 @@ async def get_fund_daily(
     Args:
         year: Year (2021+).
         month: Month (1-12).
-        cnpj_filter: Filter by fund CNPJ.
+        cnpj_filter: Filter by fund CNPJ (highly recommended to reduce memory).
     """
     ym = f"{year}{month:02d}"
     url = FUND_DAILY_URL.format(ym=ym)
     rows = await fetch_csv_from_zip(url)
-    results = []
+    results: list[FundDaily] = []
     for row in rows:
         cnpj = row.get("CNPJ_FUNDO_CLASSE") or row.get("CNPJ_FUNDO", "")
         if cnpj_filter and cnpj != cnpj_filter:
@@ -123,12 +126,12 @@ async def get_fund_daily(
                 FundDaily(
                     cnpj=cnpj,
                     dt_comptc=row.get("DT_COMPTC", ""),
-                    vl_total=float(row.get("VL_TOTAL", "0")),
-                    vl_quota=float(row.get("VL_QUOTA", "0")),
-                    vl_patrimonio_liq=float(row.get("VL_PATRIM_LIQ", "0")),
-                    captacao_dia=float(row.get("CAPTC_DIA", "0")),
-                    resgate_dia=float(row.get("RESG_DIA", "0")),
-                    nr_cotistas=int(row.get("NR_COTST", "0")),
+                    vl_total=float(row.get("VL_TOTAL", "0") or "0"),
+                    vl_quota=float(row.get("VL_QUOTA", "0") or "0"),
+                    vl_patrimonio_liq=float(row.get("VL_PATRIM_LIQ", "0") or "0"),
+                    captacao_dia=float(row.get("CAPTC_DIA", "0") or "0"),
+                    resgate_dia=float(row.get("RESG_DIA", "0") or "0"),
+                    nr_cotistas=int(row.get("NR_COTST", "0") or "0"),
                 )
             )
         except (ValueError, KeyError):

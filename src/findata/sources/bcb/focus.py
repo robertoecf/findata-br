@@ -5,9 +5,9 @@ Public API, no auth. Weekly survey of ~130 financial institutions.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from findata.http_client import get_json
 
@@ -31,7 +31,12 @@ def _validate_indicator(indicator: str) -> str:
     )
 
 
+_COERCE = ConfigDict(coerce_numbers_to_str=True)
+
+
 class FocusExpectation(BaseModel):
+    model_config = _COERCE
+
     indicador: str
     data: str
     data_referencia: str
@@ -45,6 +50,8 @@ class FocusExpectation(BaseModel):
 
 
 class FocusSelic(BaseModel):
+    model_config = _COERCE
+
     indicador: str
     data: str
     reuniao: str
@@ -54,8 +61,11 @@ class FocusSelic(BaseModel):
     maximo: float | None = None
 
 
-def _parse_odata(raw: dict[str, Any], model: type[BaseModel], mapping: dict[str, str]) -> list:
-    """Generic OData value→Pydantic parser. Eliminates per-endpoint parsers."""
+M = TypeVar("M", bound=BaseModel)
+
+
+def _parse_odata(raw: dict[str, Any], model: type[M], mapping: dict[str, str]) -> list[M]:
+    """Generic OData value→Pydantic parser. Pydantic v2 coerces scalar types."""
     return [
         model(**{local: item.get(remote) for local, remote in mapping.items()})
         for item in raw.get("value", [])
@@ -87,27 +97,26 @@ async def _fetch_expectations(
         "$top": str(top), "$format": "json",
         "$orderby": "Data desc", "$filter": f"Indicador eq '{safe}'",
     })
-    results = _parse_odata(raw, FocusExpectation, _EXPECTATION_MAP)
-    # DataReferencia comes as int/str depending on endpoint — normalize
-    for r in results:
-        r.data_referencia = str(r.data_referencia)
-    return results
+    return _parse_odata(raw, FocusExpectation, _EXPECTATION_MAP)
 
 
 async def get_focus_annual(indicator: str = "IPCA", top: int = 20) -> list[FocusExpectation]:
+    """Annual market expectations from Boletim Focus."""
     return await _fetch_expectations("ExpectativasMercadoAnuais", indicator, top)
 
 
 async def get_focus_monthly(indicator: str = "IPCA", top: int = 20) -> list[FocusExpectation]:
-    # Singular "Expectativa" — BCB naming inconsistency
+    """Monthly market expectations (note: endpoint uses singular 'Expectativa')."""
     return await _fetch_expectations("ExpectativaMercadoMensais", indicator, top)
 
 
 async def get_focus_top5_annual(indicator: str = "IPCA", top: int = 20) -> list[FocusExpectation]:
+    """Top 5 forecasters' annual expectations."""
     return await _fetch_expectations("ExpectativasMercadoTop5Anuais", indicator, top)
 
 
 async def get_focus_selic(top: int = 20) -> list[FocusSelic]:
+    """Selic expectations per COPOM meeting."""
     raw = await get_json(f"{BASE_URL}/ExpectativasMercadoSelic", {
         "$top": str(top), "$format": "json", "$orderby": "Data desc",
     })

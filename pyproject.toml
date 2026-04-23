@@ -8,18 +8,22 @@ version = "0.1.0"
 description = "Open-source Brazilian financial data API, MCP server, and CLI"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
-authors = [{ name = "Roberto", email = "robertoecf@gmail.com" }]
-keywords = ["brazil", "finance", "api", "mcp", "bcb", "cvm", "b3"]
+authors = [{ name = "Roberto", email = "robertoecf@users.noreply.github.com" }]
+keywords = ["brazil", "brasil", "finance", "financas", "api", "mcp", "bcb", "cvm", "b3", "ibge", "tesouro", "ptax", "focus", "selic", "ipca"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Financial and Insurance Industry",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Office/Business :: Financial",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
 ]
 
 dependencies = [
@@ -30,15 +34,19 @@ dependencies = [
     "fastapi-mcp>=0.1",
     "typer>=0.15",
     "rich>=13.0",
-    "yfinance>=0.2.50",
 ]
 
 [project.optional-dependencies]
+b3 = ["yfinance>=0.2.50"]
+all = ["yfinance>=0.2.50"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
+    "pytest-cov>=5.0",
     "ruff>=0.9",
     "mypy>=1.14",
+    "yfinance>=0.2.50",
+    "respx>=0.21",
 ]
 
 [project.scripts]
@@ -47,21 +55,41 @@ findata = "findata.cli:app"
 [project.urls]
 Homepage = "https://github.com/robertoecf/findata-br"
 Repository = "https://github.com/robertoecf/findata-br"
+Issues = "https://github.com/robertoecf/findata-br/issues"
+Documentation = "https://github.com/robertoecf/findata-br#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/findata"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/findata", "tests", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # allow Portuguese accents in strings/docstrings
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]
+# FastAPI idiom: Query() / Depends() calls in argument defaults.
+"src/findata/api/routers/**" = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yfinance", "yfinance.*", "fastapi_mcp", "fastapi_mcp.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: tests that hit live public APIs (deselect with '-m \"not integration\"')",
+]
+addopts = ["-m", "not integration"]

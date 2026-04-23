@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import csv
 import io
+import time
 from datetime import date
-from functools import lru_cache
 
 from pydantic import BaseModel
 
@@ -48,7 +48,7 @@ def _date_br(val: str) -> str:
     return f"{parts[2]}-{parts[1]}-{parts[0]}" if len(parts) == 3 else val
 
 
-# Parsed-data cache (avoids re-parsing 170k rows on every call)
+# Parsed-data cache (avoids re-parsing ~170k rows on every call)
 _parsed: list[TreasuryBond] | None = None
 _parsed_at: float = 0
 _PARSED_TTL = 3600
@@ -56,13 +56,12 @@ _PARSED_TTL = 3600
 
 async def _fetch_all() -> list[TreasuryBond]:
     global _parsed, _parsed_at
-    import time
     if _parsed and (time.time() - _parsed_at < _PARSED_TTL):
         return _parsed
 
     raw = await get_bytes(TESOURO_CSV_URL, cache_ttl=3600)
     reader = csv.DictReader(io.StringIO(raw.decode("utf-8")), delimiter=";")
-    results = []
+    results: list[TreasuryBond] = []
     for row in reader:
         tipo = row.get("Tipo Titulo", "")
         venc = _date_br(row.get("Data Vencimento", ""))
@@ -106,6 +105,7 @@ async def get_treasury_bonds(
     end: date | None = None,
     limit: int = 500,
 ) -> list[TreasuryBond]:
+    """Get treasury bonds, optionally filtered by type and date range."""
     bonds = await _fetch_all()
     if tipo:
         bonds = _filter_by_text(bonds, "tipo", tipo)
@@ -116,9 +116,11 @@ async def get_treasury_bonds(
 async def get_bond_history(
     titulo: str, start: date | None = None, end: date | None = None,
 ) -> list[TreasuryBond]:
+    """Get price/rate history for a specific bond by title substring."""
     bonds = _filter_by_text(await _fetch_all(), "titulo", titulo)
     return _filter_by_dates(bonds, start, end)
 
 
 async def search_bonds(query: str) -> list[str]:
+    """Search bond titles by substring. Returns unique, sorted titles."""
     return sorted({b.titulo for b in _filter_by_text(await _fetch_all(), "titulo", query)})

@@ -4,6 +4,7 @@ yfinance uses Yahoo Finance's publicly available endpoints.
 No API key required. Brazilian tickers use .SA suffix.
 
 Note: yfinance is sync-only, so we run it in a thread executor.
+Import this only if yfinance is installed (pip install findata-br[b3]).
 """
 
 from __future__ import annotations
@@ -11,10 +12,11 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from typing import Any
 
 from pydantic import BaseModel
 
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="findata-b3")
 
 
 class StockQuote(BaseModel):
@@ -48,9 +50,19 @@ def _ensure_sa(ticker: str) -> str:
     return t
 
 
+def _import_yfinance() -> Any:
+    try:
+        import yfinance as yf
+    except ImportError as exc:
+        raise RuntimeError(
+            "B3 support requires yfinance. Install with: pip install 'findata-br[b3]'"
+        ) from exc
+    return yf
+
+
 def _fetch_quote_sync(ticker: str) -> StockQuote:
     """Fetch current quote (sync, runs in thread)."""
-    import yfinance as yf
+    yf = _import_yfinance()
 
     sa_ticker = _ensure_sa(ticker)
     stock = yf.Ticker(sa_ticker)
@@ -77,13 +89,13 @@ def _fetch_history_sync(
     interval: str,
 ) -> list[StockHistoryPoint]:
     """Fetch historical data (sync, runs in thread)."""
-    import yfinance as yf
+    yf = _import_yfinance()
 
     sa_ticker = _ensure_sa(ticker)
     stock = yf.Ticker(sa_ticker)
     df = stock.history(period=period, interval=interval)
 
-    results = []
+    results: list[StockHistoryPoint] = []
     for idx, row in df.iterrows():
         results.append(
             StockHistoryPoint(
@@ -103,9 +115,9 @@ async def get_quote(ticker: str) -> StockQuote:
 
     Args:
         ticker: B3 ticker (e.g., 'PETR4', 'VALE3', 'WEGE3').
-              .SA suffix is added automatically.
+            .SA suffix is added automatically.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, partial(_fetch_quote_sync, ticker))
 
 
@@ -121,7 +133,7 @@ async def get_history(
         period: Data period — 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max.
         interval: Data interval — 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _executor, partial(_fetch_history_sync, ticker, period, interval)
     )

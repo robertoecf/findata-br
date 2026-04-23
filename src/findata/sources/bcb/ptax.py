@@ -77,6 +77,7 @@ async def get_ptax_currency(currency: str, d: date | None = None) -> list[PTAXQu
 
 
 async def get_currencies() -> list[Currency]:
+    """List all currencies available in PTAX."""
     raw = await get_json(f"{BASE_URL}/Moedas", {"$format": "json"})
     return [
         Currency(simbolo=c["simbolo"], nome=c["nomeFormatado"], tipo_moeda=c["tipoMoeda"])

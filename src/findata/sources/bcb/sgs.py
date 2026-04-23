@@ -16,6 +16,9 @@ BASE_URL = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados"
 
 SERIES_CATALOG: dict[str, dict[str, Any]] = {
     "selic": {"code": 432, "name": "Taxa Selic", "unit": "% a.a.", "freq": "diária"},
+    "selic_meta": {
+        "code": 4189, "name": "Taxa Selic Meta", "unit": "% a.a.", "freq": "diária",
+    },
     "cdi": {"code": 12, "name": "Taxa CDI", "unit": "% a.a.", "freq": "diária"},
     "cdi_acum_mensal": {
         "code": 4389, "name": "CDI acumulado mensal", "unit": "%", "freq": "mensal",
@@ -51,7 +54,7 @@ class SGSDataPoint(BaseModel):
 
 
 def _parse(raw: list[dict[str, str]]) -> list[SGSDataPoint]:
-    results = []
+    results: list[SGSDataPoint] = []
     for item in raw:
         try:
             results.append(SGSDataPoint(data=item["data"], valor=float(item["valor"])))

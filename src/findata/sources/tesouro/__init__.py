@@ -5,13 +5,15 @@ No auth required. CSV format.
 """
 
 from findata.sources.tesouro.bonds import (
+    TreasuryBond,
     get_bond_history,
     get_treasury_bonds,
     search_bonds,
 )
 
 __all__ = [
-    "get_treasury_bonds",
+    "TreasuryBond",
     "get_bond_history",
+    "get_treasury_bonds",
     "search_bonds",
 ]

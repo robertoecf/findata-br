@@ -2,22 +2,31 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi_mcp import FastApiMCP
 
+from findata import __version__ as _pkg_version
 from findata.api.routers import b3, bcb, cvm, ibge, tesouro
 from findata.http_client import close_client
 
-_VERSION = version("findata-br")
+
+def _resolve_version() -> str:
+    try:
+        return version("findata-br")
+    except PackageNotFoundError:
+        return _pkg_version
+
+
+_VERSION = _resolve_version()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     await close_client()
 
@@ -26,7 +35,7 @@ app = FastAPI(
     title="findata-br",
     description=(
         "Open-source Brazilian financial data API. "
-        "Aggregates public data from BCB, CVM, B3, ANBIMA, and Tesouro Nacional. "
+        "Aggregates public data from BCB, CVM, B3, IBGE, and Tesouro Nacional. "
         "Free. No API key required."
     ),
     version=_VERSION,
@@ -58,25 +67,34 @@ app.include_router(b3.router)
 
 
 # ── MCP Server (auto-generated from FastAPI endpoints) ─────────────
+# Mounted lazily — fastapi_mcp may fail in minimal environments, we don't
+# want the whole API to 500 just because the MCP companion isn't ready.
+try:
+    from fastapi_mcp import FastApiMCP
 
-mcp = FastApiMCP(
-    app,
-    name="findata-br",
-    description="Brazilian financial data MCP server — BCB, CVM, B3, IBGE, Tesouro",
-)
-mcp.mount()  # Serves MCP at /mcp
+    _mcp = FastApiMCP(
+        app,
+        name="findata-br",
+        description="Brazilian financial data MCP server — BCB, CVM, B3, IBGE, Tesouro",
+    )
+    # fastapi-mcp >=0.4 prefers mount_http; older versions expose mount().
+    _mount = getattr(_mcp, "mount_http", None) or _mcp.mount
+    _mount()  # Serves MCP at /mcp
+    _MCP_ENABLED = True
+except Exception:  # optional subsystem must never break core API
+    _MCP_ENABLED = False
 
 
 # ── Health / Root ──────────────────────────────────────────────────
 
 
 @app.get("/", tags=["Meta"])
-async def root():
+async def root() -> dict[str, object]:
     return {
         "name": "findata-br",
         "version": _VERSION,
         "docs": "/docs",
-        "mcp": "/mcp",
+        "mcp": "/mcp" if _MCP_ENABLED else None,
         "sources": {
             "bcb": "Banco Central do Brasil (Selic, IPCA, PTAX, Focus)",
             "cvm": "CVM (companies, financial statements, funds)",
@@ -85,3 +103,9 @@ async def root():
             "b3": "B3 (stock quotes via yfinance)",
         },
     }
+
+
+@app.get("/health", tags=["Meta"])
+async def health() -> dict[str, str]:
+    """Liveness probe."""
+    return {"status": "ok", "version": _VERSION}
