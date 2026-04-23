@@ -142,6 +142,19 @@ ferramentas.
 }
 ```
 
+### 🌎 Rodando como MCP server público
+
+Quer compartilhar sua instância com a comunidade? O guia
+[**docs/DEPLOY_PUBLIC.md**](docs/DEPLOY_PUBLIC.md) mostra como subir o
+findata-br no seu PC/WSL com **Cloudflare Tunnel** em ~20 min, custo R$ 0:
+HTTPS automático, URL fixa, DDoS protegido, rate-limit embutido. Quando a
+URL pública estiver no ar, qualquer pessoa pode apontar o Claude Desktop /
+Cursor / Codex pra ela e usar as 27 rotas como tools MCP.
+
+- Rate limit configurável via env: `FINDATA_RATE_LIMIT_DEFAULT="60/minute;1000/day"`.
+- `/health`, `/stats` e Swagger em `/docs` — observabilidade out-of-the-box.
+- `deploy/docker-compose.prod.yml` e `deploy/findata-br.service` prontos pra produção.
+
 ## 🏗️ Arquitetura
 
 ```
@@ -188,6 +201,16 @@ tests**, todos verdes.
 - **Expansão IBGE** — PNAD Contínua, produção industrial, comércio varejista, confiança.
 - **Cache Redis** — opt-in para cache distribuído em deploys multi-réplica.
 - **SDK TypeScript** — cliente gerado a partir do OpenAPI.
+
+## 🌱 Comunidade
+
+findata-br é **open-source pra durar** — MIT, sem CLA, sem adotar upstream
+comercial. O roadmap depende de quem usa: se você sentir falta de uma fonte
+(ANBIMA, SUSEP, BNDES, ...), abra uma
+[issue usando o template "Nova fonte"](https://github.com/robertoecf/findata-br/issues/new?template=new-source.yml).
+
+Qualquer desenvolvedor brasileiro interessado em dados financeiros abertos é
+convidado a hospedar sua própria instância pública e colaborar com PRs.
 
 ## 🤝 Contribuindo
 

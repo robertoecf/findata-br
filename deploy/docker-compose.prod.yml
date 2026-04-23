@@ -1,0 +1,51 @@
+services:
+  findata:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: findata-br:latest
+    container_name: findata-br
+    restart: unless-stopped
+    # Publish only on loopback — Cloudflare Tunnel reaches in via `cloudflared`.
+    # Change to "0.0.0.0:8000:8000" if you terminate TLS with your own nginx.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      FINDATA_RATE_LIMIT_DEFAULT: "60/minute;1000/day"
+      FINDATA_RATE_LIMIT_ENABLED: "true"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=2).status==200 else 1)"
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: "512M"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Optional — Cloudflare Tunnel to expose findata-br publicly without
+  # touching your router. Provision a tunnel in the Cloudflare dashboard,
+  # put the credentials at ./cloudflared/<tunnel-id>.json, and set
+  # CF_TUNNEL_TOKEN in .env (or swap for `tunnel run --token $TOKEN`).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: findata-br-tunnel
+    restart: unless-stopped
+    depends_on:
+      findata:
+        condition: service_healthy
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
+    profiles: ["tunnel"]  # opt-in: docker compose --profile tunnel up

@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — public MCP server ergonomics
+
+- **Rate limiting** via `slowapi` — `FINDATA_RATE_LIMIT_DEFAULT` env var
+  (default `60/minute;1000/day`), keyed by `X-Forwarded-For` then
+  remote address. Emits `X-RateLimit-Limit/Remaining/Reset` headers.
+  Toggle with `FINDATA_RATE_LIMIT_ENABLED=false` for local dev.
+- **`GET /stats`** endpoint — uptime, cache size, sources, MCP enabled,
+  rate-limit state. Cheap to poll from status pages.
+- **`deploy/findata-br.service`** — hardened systemd unit (NoNewPrivileges,
+  ProtectSystem=strict, MemoryMax=512M).
+- **`deploy/docker-compose.prod.yml`** — localhost-only binding + optional
+  `cloudflared` sidecar behind a `--profile tunnel` flag.
+- **`docs/DEPLOY_PUBLIC.md`** — full walkthrough (pt-BR) to stand the
+  server up on Windows+WSL2 behind Cloudflare Tunnel for free.
+- **Community scaffolding** — issue templates (`new-source`, `bug`) with
+  a `config.yml` that links to Discussions + the deploy guide, plus
+  `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
+
 ### Changed — legacy cleanup
 
 - **Extract `findata._cache.TTLCache`**, eliminating three copy-pasted

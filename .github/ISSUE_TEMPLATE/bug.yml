@@ -1,0 +1,57 @@
+name: Bug
+description: Algo não está funcionando como esperado
+title: "[bug] <descrição curta>"
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Versão
+      placeholder: "0.1.0 (saída de `findata --version`)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Fonte afetada
+      options:
+        - BCB (SGS / PTAX / Focus)
+        - CVM (companies / financials / funds)
+        - B3 (quotes)
+        - IBGE
+        - IPEA
+        - Tesouro
+        - http_client / cache
+        - CLI
+        - API / Router
+        - MCP
+        - Outro
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Como reproduzir
+      description: Comando exato (curl ou findata CLI) + o que você esperava
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: O que aconteceu
+      description: Stack trace, HTTP status, body da resposta...
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Ambiente
+      placeholder: |
+        - OS: Ubuntu 22.04 / Windows 11 + WSL / macOS 15
+        - Python: 3.12.1
+        - findata-br: 0.1.0 (instalado via pip / docker / source)

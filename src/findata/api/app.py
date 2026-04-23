@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import PackageNotFoundError, version
@@ -9,10 +10,16 @@ from importlib.metadata import PackageNotFoundError, version
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.middleware import SlowAPIMiddleware
 
 from findata import __version__ as _pkg_version
+from findata._limits import RateLimitExceeded, _rate_limit_exceeded_handler, limiter
 from findata.api.routers import b3, bcb, cvm, ibge, ipea, tesouro
+from findata.http_client import MAX_CACHE_SIZE as _CACHE_MAX
+from findata.http_client import _cache as _http_cache
 from findata.http_client import close_client
+
+_STARTED_AT = time.time()
 
 
 def _resolve_version() -> str:
@@ -58,6 +65,13 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=["*"],
 )
+
+# Attach the SlowAPI limiter so routes can use the `limiter` dependency and
+# the middleware can short-circuit requests that exceed the bucket. Disabled
+# when FINDATA_RATE_LIMIT_ENABLED=false (useful for local dev).
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(ValueError)
@@ -117,3 +131,25 @@ async def root() -> dict[str, object]:
 async def health() -> dict[str, str]:
     """Liveness probe."""
     return {"status": "ok", "version": _VERSION}
+
+
+@app.get("/stats", tags=["Meta"])
+async def stats() -> dict[str, object]:
+    """Observability snapshot for the public deployment.
+
+    Cheap enough to hit from a status page or a scraping script; returns
+    the same info you'd otherwise have to SSH in to get.
+    """
+    return {
+        "version": _VERSION,
+        "uptime_seconds": int(time.time() - _STARTED_AT),
+        "mcp_enabled": _MCP_ENABLED,
+        "cache": {
+            "size": len(_http_cache),
+            "max_size": _CACHE_MAX,
+        },
+        "sources": ["bcb", "cvm", "tesouro", "ibge", "ipea", "b3"],
+        "rate_limits": {
+            "enabled": limiter.enabled,
+        },
+    }

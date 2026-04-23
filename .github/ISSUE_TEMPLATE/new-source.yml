@@ -1,0 +1,85 @@
+name: Nova fonte de dados
+description: Proposta de nova fonte pública brasileira pra integrar (ANBIMA, SUSEP, etc.)
+title: "[source] <nome da fonte>"
+labels: ["new-source", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por colaborar! O findata-br só aceita fontes **abertas, sem
+        autenticação, com licença permissiva** (dados governamentais ou
+        equivalente).
+
+        Não abra issue pra: scrape de sites TOS-restritos (Investing, Yahoo via
+        scraping não-oficial), APIs que exigem registro/cadastro, ou datasets
+        que duplicam o que já temos em BCB/CVM/B3/IBGE/IPEA/Tesouro.
+
+  - type: input
+    id: name
+    attributes:
+      label: Nome da fonte
+      placeholder: "ANBIMA Data / SUSEP / BNDES / RFB"
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: URL base da API ou dataset
+      placeholder: "https://dados.anbima.com.br/..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Formato
+      options:
+        - "JSON (REST)"
+        - "OData"
+        - "CSV"
+        - "XLS/XLSX"
+        - "SOAP/XML"
+        - "Outro (descreva abaixo)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: coverage
+    attributes:
+      label: O que essa fonte expõe?
+      placeholder: "Ex.: IMA-B, IDkA, IHFA — índices de renda fixa privada. Frequência diária, histórico desde 2005."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Autenticação necessária?
+      options:
+        - "Nenhuma (totalmente aberto)"
+        - "API key gratuita (sem custo, sem cadastro jurídico)"
+        - "Cadastro obrigatório"
+        - "Convênio / contrato"
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Exemplo de request + response (curl)
+      render: bash
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirms
+    attributes:
+      label: Confirme
+      options:
+        - label: "Li o CONTRIBUTING.md e verifiquei que esta fonte não é duplicata"
+          required: true
+        - label: "A fonte tem ToS que permite uso programático e redistribuição"
+          required: true
+        - label: "Disponibilizo-me a revisar PRs ou documentar quirks da API"
+          required: false
