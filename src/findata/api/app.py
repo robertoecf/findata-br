@@ -29,6 +29,14 @@ _VERSION = _resolve_version()
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     await close_client()
+    # Shut the optional B3 thread pool down only if it was ever created.
+    try:
+        from findata.sources.b3.quotes import close_executor
+
+        close_executor()
+    except ImportError:
+        # yfinance not installed — the executor module never loaded.
+        pass
 
 
 app = FastAPI(
@@ -78,9 +86,7 @@ try:
         name="findata-br",
         description="Brazilian financial data MCP server — BCB, CVM, B3, IBGE, IPEA, Tesouro",
     )
-    # fastapi-mcp >=0.4 prefers mount_http; older versions expose mount().
-    _mount = getattr(_mcp, "mount_http", None) or _mcp.mount
-    _mount()  # Serves MCP at /mcp
+    _mcp.mount_http()  # Serves MCP at /mcp (fastapi-mcp >=0.4)
     _MCP_ENABLED = True
 except Exception:  # optional subsystem must never break core API
     _MCP_ENABLED = False

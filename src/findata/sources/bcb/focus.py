@@ -5,10 +5,9 @@ Public API, no auth. Weekly survey of ~130 financial institutions.
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
-
 from pydantic import BaseModel, ConfigDict
 
+from findata._odata import parse_odata
 from findata.http_client import get_json
 
 BASE_URL = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata"
@@ -70,17 +69,6 @@ class FocusSelic(BaseModel):
     maximo: float | None = None
 
 
-M = TypeVar("M", bound=BaseModel)
-
-
-def _parse_odata(raw: dict[str, Any], model: type[M], mapping: dict[str, str]) -> list[M]:
-    """Generic OData value→Pydantic parser. Pydantic v2 coerces scalar types."""
-    return [
-        model(**{local: item.get(remote) for local, remote in mapping.items()})
-        for item in raw.get("value", [])
-    ]
-
-
 _EXPECTATION_MAP = {
     "indicador": "Indicador",
     "data": "Data",
@@ -123,7 +111,7 @@ async def _fetch_expectations(
             "$filter": f"Indicador eq '{safe}'",
         },
     )
-    return _parse_odata(raw, FocusExpectation, _EXPECTATION_MAP)
+    return parse_odata(raw, FocusExpectation, _EXPECTATION_MAP)
 
 
 async def get_focus_annual(indicator: str = "IPCA", top: int = 20) -> list[FocusExpectation]:
@@ -151,4 +139,4 @@ async def get_focus_selic(top: int = 20) -> list[FocusSelic]:
             "$orderby": "Data desc",
         },
     )
-    return _parse_odata(raw, FocusSelic, _SELIC_MAP)
+    return parse_odata(raw, FocusSelic, _SELIC_MAP)

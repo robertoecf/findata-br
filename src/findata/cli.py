@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Coroutine
 from datetime import date
-from typing import Any
+from typing import Any, TypeVar
 
 import typer
 from rich import print as rprint
@@ -26,8 +26,11 @@ app = typer.Typer(
 _console = Console()
 
 
-def _run(coro: Coroutine[Any, Any, Any]) -> Any:
-    """Run async function from sync CLI context."""
+_R = TypeVar("_R")
+
+
+def _run(coro: Coroutine[Any, Any, _R]) -> _R:
+    """Run an async function from a sync CLI context, preserving its return type."""
     return asyncio.run(coro)
 
 

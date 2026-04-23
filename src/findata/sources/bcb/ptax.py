@@ -6,10 +6,10 @@ Public API, no auth. Date format: MM-DD-YYYY (not DD/MM/YYYY like SGS).
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
 
 from pydantic import BaseModel
 
+from findata._odata import parse_odata
 from findata.http_client import get_json
 
 BASE_URL = "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata"
@@ -31,15 +31,17 @@ def _fmt(d: date) -> str:
     return d.strftime("%m-%d-%Y")
 
 
-def _parse_quotes(raw: dict[str, Any]) -> list[PTAXQuote]:
-    return [
-        PTAXQuote(
-            cotacao_compra=item["cotacaoCompra"],
-            cotacao_venda=item["cotacaoVenda"],
-            data_hora_cotacao=item["dataHoraCotacao"],
-        )
-        for item in raw.get("value", [])
-    ]
+_QUOTE_MAP = {
+    "cotacao_compra": "cotacaoCompra",
+    "cotacao_venda": "cotacaoVenda",
+    "data_hora_cotacao": "dataHoraCotacao",
+}
+
+_CURRENCY_MAP = {
+    "simbolo": "simbolo",
+    "nome": "nomeFormatado",
+    "tipo_moeda": "tipoMoeda",
+}
 
 
 async def get_ptax_usd(d: date | None = None) -> list[PTAXQuote]:
@@ -49,7 +51,7 @@ async def get_ptax_usd(d: date | None = None) -> list[PTAXQuote]:
         f"{BASE_URL}/CotacaoDolarDia(dataCotacao=@dataCotacao)",
         {"@dataCotacao": f"'{dt}'", "$format": "json"},
     )
-    return _parse_quotes(raw)
+    return parse_odata(raw, PTAXQuote, _QUOTE_MAP)
 
 
 async def get_ptax_usd_period(start: date, end: date) -> list[PTAXQuote]:
@@ -63,7 +65,7 @@ async def get_ptax_usd_period(start: date, end: date) -> list[PTAXQuote]:
             "$format": "json",
         },
     )
-    return _parse_quotes(raw)
+    return parse_odata(raw, PTAXQuote, _QUOTE_MAP)
 
 
 async def get_ptax_currency(currency: str, d: date | None = None) -> list[PTAXQuote]:
@@ -73,13 +75,10 @@ async def get_ptax_currency(currency: str, d: date | None = None) -> list[PTAXQu
         f"{BASE_URL}/CotacaoMoedaDia(moeda=@moeda,dataCotacao=@dataCotacao)",
         {"@moeda": f"'{currency.upper()}'", "@dataCotacao": f"'{dt}'", "$format": "json"},
     )
-    return _parse_quotes(raw)
+    return parse_odata(raw, PTAXQuote, _QUOTE_MAP)
 
 
 async def get_currencies() -> list[Currency]:
     """List all currencies available in PTAX."""
     raw = await get_json(f"{BASE_URL}/Moedas", {"$format": "json"})
-    return [
-        Currency(simbolo=c["simbolo"], nome=c["nomeFormatado"], tipo_moeda=c["tipoMoeda"])
-        for c in raw.get("value", [])
-    ]
+    return parse_odata(raw, Currency, _CURRENCY_MAP)

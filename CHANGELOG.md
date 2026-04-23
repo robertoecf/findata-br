@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — legacy cleanup
+
+- **Extract `findata._cache.TTLCache`**, eliminating three copy-pasted
+  module-level caches (`_companies/_companies_at/_CACHE_TTL` in CVM
+  companies, `_catalog/_catalog_at/_CATALOG_TTL` in CVM funds,
+  `_parsed/_parsed_at/_PARSED_TTL` in Tesouro bonds) and the `global`
+  keyword dance that went with them.
+- **Extract `findata._odata.parse_odata`** — the single generic OData
+  `value[]` → Pydantic parser that lived in `bcb/focus.py`. BCB PTAX's
+  `get_ptax_*` and `get_currencies` now use it too, dropping an ad-hoc
+  `_parse_quotes` and a hand-rolled dict-unpacking list comprehension.
+- **Lazy B3 thread-pool** — `ThreadPoolExecutor` is created on first
+  use and drained by `close_executor()`, wired into the FastAPI
+  lifespan. Importing the module no longer costs a live pool.
+- **Type-safe CLI `_run`** — now `_run(coro: Coroutine[Any, Any, T]) -> T`
+  via a `TypeVar`, so `typer` handlers don't leak `Any` to callers.
+- **Pin `fastapi-mcp>=0.4`** and drop the defensive `mount()` fallback
+  — the current API is `mount_http()` and the fallback was dead code.
+- Docstrings added to previously empty `__init__.py` files (`api/`,
+  `api/routers/`, `sources/`).
+- Silence upstream `PydanticDeprecatedSince211` warning at the pytest
+  level — it's triggered from inside pydantic-core when we validate a
+  `ConfigDict` and not something our code can fix.
+
 ### Added
 
 - **IPEA Data** source (OData v4) — access to ~8k curated macroeconomic

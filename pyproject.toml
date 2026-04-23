@@ -31,7 +31,7 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "pydantic>=2.0",
-    "fastapi-mcp>=0.1",
+    "fastapi-mcp>=0.4",
     "typer>=0.15",
     "rich>=13.0",
 ]
@@ -134,3 +134,8 @@ markers = [
     "integration: tests that hit live public APIs (deselect with '-m \"not integration\"')",
 ]
 addopts = ["-m", "not integration"]
+filterwarnings = [
+    # Upstream deprecation inside pydantic-core itself (2.11) — surfaces any
+    # time we validate a model with custom ConfigDict. Not our bug.
+    "ignore::pydantic.PydanticDeprecatedSince211",
+]

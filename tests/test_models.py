@@ -52,7 +52,9 @@ def test_focus_parse_odata_coerces_int_data_referencia() -> None:
             },
         ],
     }
-    out = focus._parse_odata(raw, focus.FocusExpectation, focus._EXPECTATION_MAP)
+    from findata._odata import parse_odata
+
+    out = parse_odata(raw, focus.FocusExpectation, focus._EXPECTATION_MAP)
     assert out[0].data_referencia == "2026"
     assert out[0].media == 3.8
 

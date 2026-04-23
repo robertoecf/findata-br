@@ -6,10 +6,9 @@ Daily NAV/quota: https://dados.cvm.gov.br/dados/FI/DOC/INF_DIARIO/DADOS/inf_diar
 
 from __future__ import annotations
 
-import time
-
 from pydantic import BaseModel
 
+from findata._cache import TTLCache
 from findata.sources.cvm.parser import fetch_csv, fetch_csv_from_zip
 
 FUND_CATALOG_URL = "https://dados.cvm.gov.br/dados/FI/CAD/DADOS/cad_fi.csv"
@@ -43,43 +42,34 @@ class FundDaily(BaseModel):
 
 
 # Parsed-data cache (avoids re-parsing the 17MB CSV on every call)
-_catalog: list[Fund] | None = None
-_catalog_at: float = 0
-_CATALOG_TTL = 3600
+_catalog_cache: TTLCache[list[Fund]] = TTLCache(ttl=3600)
+
+
+def _parse_fund_row(row: dict[str, str]) -> Fund:
+    pl_str = row.get("VL_PATRIM_LIQ", "")
+    try:
+        pl = float(pl_str) if pl_str else None
+    except ValueError:
+        pl = None
+    return Fund(
+        cnpj=row.get("CNPJ_FUNDO", ""),
+        nome=row.get("DENOM_SOCIAL", ""),
+        classe=row.get("CLASSE", ""),
+        situacao=row.get("SIT", ""),
+        tipo=row.get("TP_FUNDO", ""),
+        fundo_cotas=row.get("FUNDO_COTAS", ""),
+        exclusivo=row.get("FUNDO_EXCLUSIVO", ""),
+        patrimonio_liquido=pl,
+        taxa_admin=row.get("TAXA_ADM", ""),
+        gestor=row.get("GESTOR", ""),
+        administrador=row.get("ADMIN", ""),
+        classe_anbima=row.get("CLASSE_ANBIMA", ""),
+    )
 
 
 async def _load_catalog() -> list[Fund]:
-    global _catalog, _catalog_at
-    if _catalog and time.time() - _catalog_at < _CATALOG_TTL:
-        return _catalog
-
     rows = await fetch_csv(FUND_CATALOG_URL)
-    results: list[Fund] = []
-    for row in rows:
-        pl_str = row.get("VL_PATRIM_LIQ", "")
-        try:
-            pl = float(pl_str) if pl_str else None
-        except ValueError:
-            pl = None
-        results.append(
-            Fund(
-                cnpj=row.get("CNPJ_FUNDO", ""),
-                nome=row.get("DENOM_SOCIAL", ""),
-                classe=row.get("CLASSE", ""),
-                situacao=row.get("SIT", ""),
-                tipo=row.get("TP_FUNDO", ""),
-                fundo_cotas=row.get("FUNDO_COTAS", ""),
-                exclusivo=row.get("FUNDO_EXCLUSIVO", ""),
-                patrimonio_liquido=pl,
-                taxa_admin=row.get("TAXA_ADM", ""),
-                gestor=row.get("GESTOR", ""),
-                administrador=row.get("ADMIN", ""),
-                classe_anbima=row.get("CLASSE_ANBIMA", ""),
-            )
-        )
-    _catalog = results
-    _catalog_at = time.time()
-    return results
+    return [_parse_fund_row(row) for row in rows]
 
 
 async def get_fund_catalog(
@@ -92,13 +82,30 @@ async def get_fund_catalog(
         only_active: Filter only active funds (SIT='EM FUNCIONAMENTO NORMAL').
         classe_filter: Filter by class (e.g., 'Fundo de Ações', 'FI-Infra').
     """
-    funds = await _load_catalog()
+    funds = await _catalog_cache.get_or_load(_load_catalog)
     if only_active:
         funds = [f for f in funds if "FUNCIONAMENTO NORMAL" in f.situacao]
     if classe_filter:
         cf = classe_filter.upper()
         funds = [f for f in funds if cf in f.classe.upper()]
     return funds
+
+
+def _parse_daily_row(row: dict[str, str]) -> FundDaily | None:
+    cnpj = row.get("CNPJ_FUNDO_CLASSE") or row.get("CNPJ_FUNDO", "")
+    try:
+        return FundDaily(
+            cnpj=cnpj,
+            dt_comptc=row.get("DT_COMPTC", ""),
+            vl_total=float(row.get("VL_TOTAL", "0") or "0"),
+            vl_quota=float(row.get("VL_QUOTA", "0") or "0"),
+            vl_patrimonio_liq=float(row.get("VL_PATRIM_LIQ", "0") or "0"),
+            captacao_dia=float(row.get("CAPTC_DIA", "0") or "0"),
+            resgate_dia=float(row.get("RESG_DIA", "0") or "0"),
+            nr_cotistas=int(row.get("NR_COTST", "0") or "0"),
+        )
+    except (ValueError, KeyError):
+        return None
 
 
 async def get_fund_daily(
@@ -121,19 +128,7 @@ async def get_fund_daily(
         cnpj = row.get("CNPJ_FUNDO_CLASSE") or row.get("CNPJ_FUNDO", "")
         if cnpj_filter and cnpj != cnpj_filter:
             continue
-        try:
-            results.append(
-                FundDaily(
-                    cnpj=cnpj,
-                    dt_comptc=row.get("DT_COMPTC", ""),
-                    vl_total=float(row.get("VL_TOTAL", "0") or "0"),
-                    vl_quota=float(row.get("VL_QUOTA", "0") or "0"),
-                    vl_patrimonio_liq=float(row.get("VL_PATRIM_LIQ", "0") or "0"),
-                    captacao_dia=float(row.get("CAPTC_DIA", "0") or "0"),
-                    resgate_dia=float(row.get("RESG_DIA", "0") or "0"),
-                    nr_cotistas=int(row.get("NR_COTST", "0") or "0"),
-                )
-            )
-        except (ValueError, KeyError):
-            continue
+        parsed = _parse_daily_row(row)
+        if parsed is not None:
+            results.append(parsed)
     return results

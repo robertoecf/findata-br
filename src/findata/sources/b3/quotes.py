@@ -16,7 +16,24 @@ from typing import Any
 
 from pydantic import BaseModel
 
-_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="findata-b3")
+# Executor is created on first use so importing the module costs nothing,
+# and we expose `close_executor()` so the FastAPI `lifespan` can drain it.
+_executor: ThreadPoolExecutor | None = None
+
+
+def _get_executor() -> ThreadPoolExecutor:
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="findata-b3")
+    return _executor
+
+
+def close_executor() -> None:
+    """Shut the B3 thread pool down. Called on API shutdown."""
+    global _executor
+    if _executor is not None:
+        _executor.shutdown(wait=False, cancel_futures=True)
+        _executor = None
 
 
 class StockQuote(BaseModel):
@@ -118,7 +135,7 @@ async def get_quote(ticker: str) -> StockQuote:
             .SA suffix is added automatically.
     """
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_executor, partial(_fetch_quote_sync, ticker))
+    return await loop.run_in_executor(_get_executor(), partial(_fetch_quote_sync, ticker))
 
 
 async def get_history(
@@ -135,7 +152,7 @@ async def get_history(
     """
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
-        _executor, partial(_fetch_history_sync, ticker, period, interval)
+        _get_executor(), partial(_fetch_history_sync, ticker, period, interval)
     )
 
 
