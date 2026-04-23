@@ -47,7 +47,7 @@ def render_static_banner(console: Console | None = None) -> None:
         text.append_text(_gradient_line(line, offset=i * 2))
         text.append("\n")
     tagline = Text(
-        "  Open-source Brazilian financial data  •  BCB · CVM · B3 · IBGE · Tesouro",
+        "  Open-source Brazilian financial data  •  BCB · CVM · B3 · IBGE · IPEA · Tesouro",
         style="italic dim",
     )
     console.print(Align.center(text))
@@ -86,7 +86,7 @@ def render_animated_banner(
         console.print(_gradient_line(line, offset=i * 2))
 
     tagline = Text(
-        "  Open-source Brazilian financial data  •  BCB · CVM · B3 · IBGE · Tesouro",
+        "  Open-source Brazilian financial data  •  BCB · CVM · B3 · IBGE · IPEA · Tesouro",
         style="italic dim",
     )
     console.print(tagline)

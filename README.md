@@ -4,7 +4,7 @@
 <!-- Typing SVG banner — renders the "FINDATA-BR" title as an animated typewriter
      on GitHub. Powered by readme-typing-svg.demolab.com (public, free). -->
 <a href="https://github.com/robertoecf/findata-br">
-  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=44&duration=2800&pause=900&color=009C3B&center=true&vCenter=true&width=720&height=80&lines=FINDATA-BR;Dados+abertos+do+Brasil;BCB+·+CVM+·+B3+·+IBGE+·+Tesouro" alt="FINDATA-BR" />
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=700&size=44&duration=2800&pause=900&color=009C3B&center=true&vCenter=true&width=760&height=80&lines=FINDATA-BR;Dados+abertos+do+Brasil;BCB+·+CVM+·+B3+·+IBGE+·+IPEA+·+Tesouro" alt="FINDATA-BR" />
 </a>
 
 <p><strong>Open-source Brazilian financial data — API + MCP server + CLI.</strong></p>
@@ -42,6 +42,7 @@
 | **BCB Olinda Focus** | Banco Central | Boletim Focus (weekly) — annual, monthly, Selic, Top-5 | — |
 | **CVM** | Regulator | Registered companies, DFP/ITR financial statements, investment funds catalog, daily fund NAV | — |
 | **IBGE Agregados v3** | Stats agency | IPCA breakdown by 10 groups + 365 sub-items, INPC, PIB trimestral | — |
+| **IPEA Data (OData v4)** | Applied research institute | ~8k curated macro series (long history back to 1940s), catalog search, metadata | — |
 | **Tesouro Transparente** | National Treasury | Tesouro Direto — historical prices and rates | — |
 | **B3** (optional, via `yfinance`) | Stock exchange | Current quotes, OHLC history for BOVESPA tickers | — |
 
@@ -72,6 +73,10 @@ findata tesouro search IPCA+
 findata tesouro history "Tesouro IPCA+ 2035" -n 30
 
 findata ibge ipca -n 6          # IPCA broken down by group
+
+findata ipea catalog            # curated IPEA series
+findata ipea search desemprego  # full-text search across ~8k series
+findata ipea get BM12_TJOVER12 -n 12
 
 findata cvm search Petrobras
 

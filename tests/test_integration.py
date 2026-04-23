@@ -72,6 +72,29 @@ class TestIBGE:
         assert len(groups) >= 5
 
 
+class TestIPEA:
+    async def test_get_series_values(self) -> None:
+        from findata.sources.ipea import get_series_values
+
+        data = await get_series_values("BM12_TJOVER12", top=3)
+        assert len(data) == 3
+        assert all(p.sercodigo == "BM12_TJOVER12" for p in data)
+
+    async def test_get_metadata(self) -> None:
+        from findata.sources.ipea import get_metadata
+
+        meta = await get_metadata("BM12_TJOVER12")
+        assert meta is not None
+        assert meta.sercodigo == "BM12_TJOVER12"
+        assert "Selic" in meta.sernome or "selic" in meta.sernome.lower()
+
+    async def test_search_series(self) -> None:
+        from findata.sources.ipea import search_series
+
+        results = await search_series("IPCA", top=5)
+        assert len(results) > 0
+
+
 class TestB3:
     async def test_get_quote_petr4(self) -> None:
         pytest.importorskip("yfinance")

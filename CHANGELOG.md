@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **IPEA Data** source (OData v4) — access to ~8k curated macroeconomic
+  series with endpoints for catalog listing, by-SERCODIGO values,
+  metadata, and full-text search. CLI: `findata ipea {catalog,get,search}`.
+- IPEA router at `/ipea/*` and curated built-in catalog.
+
 ## [0.1.0] — 2026-04-22
 
 ### Added

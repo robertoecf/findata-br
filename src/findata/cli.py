@@ -278,6 +278,75 @@ def ibge_ipca(
     rprint(table)
 
 
+# ── IPEA commands ──────────────────────────────────────────────────
+
+ipea_app = typer.Typer(help="IPEA Data — macro series catalog", no_args_is_help=True)
+app.add_typer(ipea_app, name="ipea")
+
+
+@ipea_app.command("catalog")
+def ipea_catalog() -> None:
+    """List the curated IPEA catalog."""
+    from findata.sources.ipea import series as ipea_series
+
+    table = Table(title="IPEA Curated Catalog")
+    table.add_column("Name", style="cyan")
+    table.add_column("SERCODIGO", style="green")
+    table.add_column("Description")
+    table.add_column("Unit")
+    table.add_column("Freq")
+    for name, info in ipea_series.IPEA_CATALOG.items():
+        table.add_row(
+            name, info["code"], info["description"],
+            info["unidade"], info["periodicidade"],
+        )
+    rprint(table)
+
+
+@ipea_app.command("get")
+def ipea_get(
+    sercodigo: str = typer.Argument(help="IPEA series code (e.g., BM12_TJOVER12)"),
+    n: int = typer.Option(10, "--last", "-n", help="Number of recent values"),
+) -> None:
+    """Fetch values for an IPEA series."""
+    from findata.sources.ipea import series as ipea_series
+
+    data = _run(ipea_series.get_series_values(sercodigo, top=n))
+    if not data:
+        rprint(f"[yellow]No values for '{sercodigo}'.[/yellow]")
+        return
+    table = Table(title=f"IPEA: {sercodigo}")
+    table.add_column("Date", style="cyan")
+    table.add_column("Value", style="green", justify="right")
+    for point in data:
+        table.add_row(point.data[:10], _fmt(point.valor, ".4f"))
+    rprint(table)
+
+
+@ipea_app.command("search")
+def ipea_search(
+    query: str = typer.Argument(help="Free-text search"),
+    top: int = typer.Option(20, "--top", "-n"),
+) -> None:
+    """Search the IPEA series catalog (~8k series)."""
+    from findata.sources.ipea import series as ipea_series
+
+    results = _run(ipea_series.search_series(query, top=top))
+    if not results:
+        rprint("[yellow]No series matched.[/yellow]")
+        return
+    table = Table(title=f"IPEA search: '{query}'")
+    table.add_column("SERCODIGO", style="cyan")
+    table.add_column("Name")
+    table.add_column("Periodicidade", style="green")
+    table.add_column("Fonte")
+    for m in results:
+        table.add_row(
+            m.sercodigo, m.sernome[:60], m.serperiodicidade or "-", m.serfonte or "-",
+        )
+    rprint(table)
+
+
 # ── CVM commands ───────────────────────────────────────────────────
 
 cvm_app = typer.Typer(help="CVM — companies and funds", no_args_is_help=True)

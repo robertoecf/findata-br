@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from findata import __version__ as _pkg_version
-from findata.api.routers import b3, bcb, cvm, ibge, tesouro
+from findata.api.routers import b3, bcb, cvm, ibge, ipea, tesouro
 from findata.http_client import close_client
 
 
@@ -35,7 +35,7 @@ app = FastAPI(
     title="findata-br",
     description=(
         "Open-source Brazilian financial data API. "
-        "Aggregates public data from BCB, CVM, B3, IBGE, and Tesouro Nacional. "
+        "Aggregates public data from BCB, CVM, B3, IBGE, IPEA, and Tesouro Nacional. "
         "Free. No API key required."
     ),
     version=_VERSION,
@@ -63,6 +63,7 @@ app.include_router(bcb.router)
 app.include_router(cvm.router)
 app.include_router(tesouro.router)
 app.include_router(ibge.router)
+app.include_router(ipea.router)
 app.include_router(b3.router)
 
 
@@ -75,7 +76,7 @@ try:
     _mcp = FastApiMCP(
         app,
         name="findata-br",
-        description="Brazilian financial data MCP server — BCB, CVM, B3, IBGE, Tesouro",
+        description="Brazilian financial data MCP server — BCB, CVM, B3, IBGE, IPEA, Tesouro",
     )
     # fastapi-mcp >=0.4 prefers mount_http; older versions expose mount().
     _mount = getattr(_mcp, "mount_http", None) or _mcp.mount
@@ -100,6 +101,7 @@ async def root() -> dict[str, object]:
             "cvm": "CVM (companies, financial statements, funds)",
             "tesouro": "Tesouro Direto (treasury bonds)",
             "ibge": "IBGE (economic indicators)",
+            "ipea": "IPEA Data (~8k macro series, long historical coverage)",
             "b3": "B3 (stock quotes via yfinance)",
         },
     }
