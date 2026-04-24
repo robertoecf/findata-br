@@ -31,14 +31,14 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 
 ---
 
-## O que você ganha
-
 ```text
                             ▌
 ▛▌  ▛▌▌▌█▌  ▌▌▛▌▛▘█▌  ▛▌▀▌▛▌▛▌▀▌
 ▙▌  ▙▌▙▌▙▖  ▚▘▙▌▙▖▙▖  ▙▌█▌▌▌▌▌█▌
      ▌                ▄▌
 ```
+
+## O que você ganha
 
 
 - **API REST** com Swagger interativo em `/docs`.
@@ -47,13 +47,13 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 - **Biblioteca async** com connection pooling, retry com backoff exponencial e cache LRU de 15 min.
 - **Zero autenticação, zero API keys.** Todas as fontes são dados públicos governamentais.
 
-## Fontes de dados
-
 ```text
 ▐▘    ▗        ▌     ▌   ▌
 ▜▘▛▌▛▌▜▘█▌▛▘  ▛▌█▌  ▛▌▀▌▛▌▛▌▛▘
 ▐ ▙▌▌▌▐▖▙▖▄▌  ▙▌▙▖  ▙▌█▌▙▌▙▌▄▌
 ```
+
+## Fontes de dados
 
 
 | Fonte | Domínio | Cobertura | Auth |
@@ -65,9 +65,7 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **IBGE Agregados v3** | Instituto de estatística | IPCA detalhado por 10 grupos + 365 subitens, INPC, PIB trimestral | — |
 | **IPEA Data (OData v4)** | Instituto de pesquisa | ~8k séries macro curadas (histórico desde a década de 1940), busca no catálogo, metadados | — |
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
-| **B3** (opcional, via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
-
-## Instalação
+| **B3** (via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
 
 ```text
 ▘    ▗   ▜
@@ -75,23 +73,65 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 ▌▌▌▄▌▐▖█▌▐▖█▌▙▖█▌▙▌
 ```
 
+## Instalação
+
+
+Um comando único — todas as 6 fontes (BCB, CVM, B3, IBGE, IPEA, Tesouro) ficam prontas pra usar:
 
 ```bash
-# Core (BCB, CVM, IBGE, IPEA, Tesouro)
 pip install findata-br
-
-# Com cotações da B3
-pip install 'findata-br[b3]'
 ```
 
-> Desenvolvimento local: `pip install -e '.[dev]'`
+### O que vai ser instalado
 
-## Uso
+findata-br é Python 3.11+ e depende de uma stack enxuta de bibliotecas
+estáveis e bem mantidas. Nada de infra, nada de banco de dados, nada de
+worker/broker — tudo acontece em processo único.
+
+| Pacote | Versão | Pra que serve |
+|---|---|---|
+| [`fastapi`](https://fastapi.tiangolo.com/) | `>=0.115` | Servidor HTTP + geração automática da Swagger UI em `/docs` |
+| [`uvicorn[standard]`](https://www.uvicorn.org/) | `>=0.34` | Loop async ASGI que serve o FastAPI (com `uvloop`, `httptools`, `watchfiles`) |
+| [`httpx`](https://www.python-httpx.org/) | `>=0.28` | Cliente HTTP async usado em todas as fontes (BCB, CVM, IPEA, etc.) |
+| [`pydantic`](https://docs.pydantic.dev/) | `>=2.0` | Modelos tipados e validação das respostas de API |
+| [`fastapi-mcp`](https://github.com/tadata-org/fastapi_mcp) | `>=0.4` | Monta o servidor MCP em `/mcp` a partir das rotas FastAPI |
+| [`typer`](https://typer.tiangolo.com/) | `>=0.15` | Framework da CLI `findata ...` |
+| [`rich`](https://rich.readthedocs.io/) | `>=13.0` | Tabelas coloridas e banner animado no terminal |
+| [`slowapi`](https://slowapi.readthedocs.io/) | `>=0.1.9` | Rate limiting por IP (protege o endpoint público) |
+| [`yfinance`](https://github.com/ranaroussi/yfinance) | `>=0.2.50` | Cotações B3 via Yahoo Finance (puxa `pandas`/`numpy` como deps transitivas) |
+
+Total instalado: ~70 MB (a maior fatia é `pandas` + `numpy`, transitivas do `yfinance`).
+Se seu deploy precisa ser mais enxuto e você não usa as rotas `/b3/*`, dá pra
+pular o `yfinance` — veja a seção [Instalação mínima](#instalacao-minima) abaixo.
+
+### Instalação mínima
+
+Só quer as fontes de dados públicos sem `yfinance`/`pandas`/`numpy`? Instale
+sem deps e adicione só o que precisar:
+
+```bash
+pip install findata-br --no-deps
+pip install fastapi 'uvicorn[standard]' httpx pydantic fastapi-mcp typer rich slowapi
+```
+
+Isso economiza ~40 MB mas as rotas `/b3/*` e o comando `findata b3 ...` vão
+retornar `503 Service Unavailable` até `yfinance` ser instalado.
+
+### Desenvolvimento local
+
+```bash
+git clone https://github.com/robertoecf/findata-br.git
+cd findata-br
+pip install -e '.[dev]'           # core + pytest, ruff, mypy, respx
+bash scripts/git/install-hooks.sh # pre-commit + pre-push hooks
+```
 
 ```text
 ▌▌▛▘▛▌
 ▙▌▄▌▙▌
 ```
+
+## Uso
 
 
 ### CLI
@@ -114,7 +154,7 @@ findata ipea get BM12_TJOVER12 -n 12
 
 findata cvm search Petrobras
 
-findata b3 quote PETR4          # requer o extra [b3]
+findata b3 quote PETR4
 findata b3 history VALE3 -p 1y
 
 findata serve                   # sobe o servidor HTTP + MCP
@@ -183,14 +223,14 @@ Cursor / Codex pra ela e usar as 27 rotas como tools MCP.
 - `/health`, `/stats` e Swagger em `/docs` — observabilidade out-of-the-box.
 - `deploy/docker-compose.prod.yml` e `deploy/findata-br.service` prontos pra produção.
 
-## Arquitetura
-
 ```text
         ▘▗   ▗
 ▀▌▛▘▛▌▌▌▌▜▘█▌▜▘▌▌▛▘▀▌
 █▌▌ ▙▌▙▌▌▐▖▙▖▐▖▙▌▌ █▌
      ▌
 ```
+
+## Arquitetura
 
 
 ```
@@ -214,13 +254,13 @@ Cada fonte é um wrapper async tipado e enxuto sobre o endpoint público oficial
 Todas compartilham `http_client.get_json` / `get_bytes` — assim pooling, retry
 e cache ficam centralizados em um único lugar.
 
-## Testes
-
 ```text
 ▗     ▗
 ▜▘█▌▛▘▜▘█▌▛▘
 ▐▖▙▖▄▌▐▖▙▖▄▌
 ```
+
+## Testes
 
 
 ```bash
@@ -233,14 +273,14 @@ Os testes de integração são pulados por padrão — dependem de acesso à red
 do uptime dos terceiros. Atualmente o projeto tem **34 unit + 15 integration
 tests**, todos verdes.
 
-## Roadmap — próximos passos
-
 ```text
        ▌
 ▛▘▛▌▀▌▛▌▛▛▌▀▌▛▌
 ▌ ▙▌█▌▙▌▌▌▌█▌▙▌
              ▌
 ```
+
+## Roadmap — próximos passos
 
 
 - **Deploy** — Dockerfile + `docker-compose` para servidor local em um comando.
@@ -253,13 +293,13 @@ tests**, todos verdes.
 - **Cache Redis** — opt-in para cache distribuído em deploys multi-réplica.
 - **SDK TypeScript** — cliente gerado a partir do OpenAPI.
 
-## Comunidade
-
 ```text
            ▘ ▌   ▌
 ▛▘▛▌▛▛▌▌▌▛▌▌▛▌▀▌▛▌█▌
 ▙▖▙▌▌▌▌▙▌▌▌▌▙▌█▌▙▌▙▖
 ```
+
+## Comunidade
 
 
 findata-br é **open-source pra durar** — MIT, sem CLA, sem adotar upstream
@@ -270,13 +310,13 @@ comercial. O roadmap depende de quem usa: se você sentir falta de uma fonte
 Qualquer desenvolvedor brasileiro interessado em dados financeiros abertos é
 convidado a hospedar sua própria instância pública e colaborar com PRs.
 
-## Contribuindo
-
 ```text
       ▗   ▘▌   ▘   ▌
 ▛▘▛▌▛▌▜▘▛▘▌▛▌▌▌▌▛▌▛▌▛▌
 ▙▖▙▌▌▌▐▖▌ ▌▙▌▙▌▌▌▌▙▌▙▌
 ```
+
+## Contribuindo
 
 
 Guia completo em [CONTRIBUTING.md](CONTRIBUTING.md). TL;DR:
@@ -294,13 +334,13 @@ cobertas por testes. Para novas fontes, adicione testes de integração em
 `tests/test_integration.py` (marcador `integration`). Para o resto, prefira
 unit tests com `respx` que não batem em rede.
 
-## Licença
-
 ```text
 ▜ ▘
 ▐ ▌▛▘█▌▛▌▛▘▀▌
 ▐▖▌▙▖▙▖▌▌▙▖█▌
 ```
+
+## Licença
 
 
 [MIT](LICENSE) — use como quiser.

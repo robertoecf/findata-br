@@ -102,7 +102,7 @@ cd /opt/findata-br
 git clone https://github.com/robertoecf/findata-br.git .
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e '.[b3]'
+pip install -e .
 EOF
 ```
 

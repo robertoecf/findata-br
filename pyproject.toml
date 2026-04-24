@@ -35,18 +35,19 @@ dependencies = [
     "typer>=0.15",
     "rich>=13.0",
     "slowapi>=0.1.9",
+    "yfinance>=0.2.50",
 ]
 
 [project.optional-dependencies]
-b3 = ["yfinance>=0.2.50"]
-all = ["yfinance>=0.2.50"]
+# Kept for backward-compat — everything is already in the core install.
+b3 = []
+all = []
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
     "pytest-cov>=5.0",
     "ruff>=0.9",
     "mypy>=1.14",
-    "yfinance>=0.2.50",
     "respx>=0.21",
 ]
 

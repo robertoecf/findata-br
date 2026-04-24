@@ -17,7 +17,7 @@ Status: **v0.1.0 — alpha, release-ready for local/self-hosted use.**
    git clone https://github.com/robertoecf/findata-br.git
    cd findata-br
    python3 -m venv .venv && . .venv/bin/activate
-   pip install -e '.[b3]'
+   pip install -e .
    findata serve --host 0.0.0.0 --port 8000
    ```
    Or Docker: `docker compose up -d`.
@@ -114,8 +114,8 @@ ideas are worth copying:
   full year — always pass `cnpj=` when hitting `/cvm/financials/*`.
 - **Fund daily NAV** files are ~50 MB/month — same recommendation: filter by
   `cnpj=`.
-- **yfinance** is optional. Without the `[b3]` extra installed, `/b3/*`
-  returns `503`.
+- **yfinance** is a core dependency since v0.1.0; if you use
+  `pip install findata-br --no-deps` and skip it, `/b3/*` returns `503`.
 - **fastapi-mcp** is pinned at a minimum version; if your deployment picks up
   a major-version break, `/mcp` is silently disabled but the REST API keeps
   serving.
