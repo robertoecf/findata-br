@@ -36,9 +36,9 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 ▛▌  ▛▌▌▌█▌  ▌▌▛▌▛▘█▌  ▛▌▀▌▛▌▛▌▀▌
 ▙▌  ▙▌▙▌▙▖  ▚▘▙▌▙▖▙▖  ▙▌█▌▌▌▌▌█▌
      ▌                ▄▌
-```
 
-## O que você ganha
+    O que você ganha
+```
 
 
 - **API REST** com Swagger interativo em `/docs`.
@@ -51,9 +51,9 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 ▐▘    ▗        ▌     ▌   ▌
 ▜▘▛▌▛▌▜▘█▌▛▘  ▛▌█▌  ▛▌▀▌▛▌▛▌▛▘
 ▐ ▙▌▌▌▐▖▙▖▄▌  ▙▌▙▖  ▙▌█▌▙▌▙▌▄▌
-```
 
-## Fontes de dados
+    Fontes de dados
+```
 
 
 | Fonte | Domínio | Cobertura | Auth |
@@ -71,9 +71,9 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 ▘    ▗   ▜
 ▌▛▌▛▘▜▘▀▌▐ ▀▌▛▘▀▌▛▌
 ▌▌▌▄▌▐▖█▌▐▖█▌▙▖█▌▙▌
-```
 
-## Instalação
+    Instalação
+```
 
 
 Um comando único — todas as 6 fontes (BCB, CVM, B3, IBGE, IPEA, Tesouro) ficam prontas pra usar:
@@ -129,9 +129,9 @@ bash scripts/git/install-hooks.sh # pre-commit + pre-push hooks
 ```text
 ▌▌▛▘▛▌
 ▙▌▄▌▙▌
-```
 
-## Uso
+    Uso
+```
 
 
 ### CLI
@@ -228,9 +228,9 @@ Cursor / Codex pra ela e usar as 27 rotas como tools MCP.
 ▀▌▛▘▛▌▌▌▌▜▘█▌▜▘▌▌▛▘▀▌
 █▌▌ ▙▌▙▌▌▐▖▙▖▐▖▙▌▌ █▌
      ▌
-```
 
-## Arquitetura
+    Arquitetura
+```
 
 
 ```
@@ -258,9 +258,9 @@ e cache ficam centralizados em um único lugar.
 ▗     ▗
 ▜▘█▌▛▘▜▘█▌▛▘
 ▐▖▙▖▄▌▐▖▙▖▄▌
-```
 
-## Testes
+    Testes
+```
 
 
 ```bash
@@ -278,9 +278,9 @@ tests**, todos verdes.
 ▛▘▛▌▀▌▛▌▛▛▌▀▌▛▌
 ▌ ▙▌█▌▙▌▌▌▌█▌▙▌
              ▌
-```
 
-## Roadmap — próximos passos
+    Roadmap — próximos passos
+```
 
 
 - **Deploy** — Dockerfile + `docker-compose` para servidor local em um comando.
@@ -297,9 +297,9 @@ tests**, todos verdes.
            ▘ ▌   ▌
 ▛▘▛▌▛▛▌▌▌▛▌▌▛▌▀▌▛▌█▌
 ▙▖▙▌▌▌▌▙▌▌▌▌▙▌█▌▙▌▙▖
-```
 
-## Comunidade
+    Comunidade
+```
 
 
 findata-br é **open-source pra durar** — MIT, sem CLA, sem adotar upstream
@@ -314,9 +314,9 @@ convidado a hospedar sua própria instância pública e colaborar com PRs.
       ▗   ▘▌   ▘   ▌
 ▛▘▛▌▛▌▜▘▛▘▌▛▌▌▌▌▛▌▛▌▛▌
 ▙▖▙▌▌▌▐▖▌ ▌▙▌▙▌▌▌▌▙▌▙▌
-```
 
-## Contribuindo
+    Contribuindo
+```
 
 
 Guia completo em [CONTRIBUTING.md](CONTRIBUTING.md). TL;DR:
@@ -338,9 +338,9 @@ unit tests com `respx` que não batem em rede.
 ▜ ▘
 ▐ ▌▛▘█▌▛▌▛▘▀▌
 ▐▖▌▙▖▙▖▌▌▙▖█▌
-```
 
-## Licença
+    Licença
+```
 
 
 [MIT](LICENSE) — use como quiser.
