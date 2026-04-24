@@ -31,7 +31,15 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 
 ---
 
-## ✨ O que você ganha
+## O que você ganha
+
+```text
+                            ▌
+▛▌  ▛▌▌▌█▌  ▌▌▛▌▛▘█▌  ▛▌▀▌▛▌▛▌▀▌
+▙▌  ▙▌▙▌▙▖  ▚▘▙▌▙▖▙▖  ▙▌█▌▌▌▌▌█▌
+     ▌                ▄▌
+```
+
 
 - **API REST** com Swagger interativo em `/docs`.
 - **Servidor MCP** montado automaticamente em `/mcp` — plugue o findata-br direto no Claude, Cursor, Codex.
@@ -39,7 +47,14 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 - **Biblioteca async** com connection pooling, retry com backoff exponencial e cache LRU de 15 min.
 - **Zero autenticação, zero API keys.** Todas as fontes são dados públicos governamentais.
 
-## 📊 Fontes de dados
+## Fontes de dados
+
+```text
+▐▘    ▗        ▌     ▌   ▌
+▜▘▛▌▛▌▜▘█▌▛▘  ▛▌█▌  ▛▌▀▌▛▌▛▌▛▘
+▐ ▙▌▌▌▐▖▙▖▄▌  ▙▌▙▖  ▙▌█▌▙▌▙▌▄▌
+```
+
 
 | Fonte | Domínio | Cobertura | Auth |
 |---|---|---|---|
@@ -52,7 +67,14 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
 | **B3** (opcional, via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
 
-## 🚀 Instalação
+## Instalação
+
+```text
+▘    ▗   ▜
+▌▛▌▛▘▜▘▀▌▐ ▀▌▛▘▀▌▛▌
+▌▌▌▄▌▐▖█▌▐▖█▌▙▖█▌▙▌
+```
+
 
 ```bash
 # Core (BCB, CVM, IBGE, IPEA, Tesouro)
@@ -64,7 +86,13 @@ pip install 'findata-br[b3]'
 
 > Desenvolvimento local: `pip install -e '.[dev]'`
 
-## 🔧 Uso
+## Uso
+
+```text
+▌▌▛▘▛▌
+▙▌▄▌▙▌
+```
+
 
 ### CLI
 
@@ -142,7 +170,7 @@ ferramentas.
 }
 ```
 
-### 🌎 Rodando como MCP server público
+### Rodando como MCP server público
 
 Quer compartilhar sua instância com a comunidade? O guia
 [**docs/DEPLOY_PUBLIC.md**](docs/DEPLOY_PUBLIC.md) mostra como subir o
@@ -155,7 +183,15 @@ Cursor / Codex pra ela e usar as 27 rotas como tools MCP.
 - `/health`, `/stats` e Swagger em `/docs` — observabilidade out-of-the-box.
 - `deploy/docker-compose.prod.yml` e `deploy/findata-br.service` prontos pra produção.
 
-## 🏗️ Arquitetura
+## Arquitetura
+
+```text
+        ▘▗   ▗
+▀▌▛▘▛▌▌▌▌▜▘█▌▜▘▌▌▛▘▀▌
+█▌▌ ▙▌▙▌▌▐▖▙▖▐▖▙▌▌ █▌
+     ▌
+```
+
 
 ```
  findata/
@@ -178,7 +214,14 @@ Cada fonte é um wrapper async tipado e enxuto sobre o endpoint público oficial
 Todas compartilham `http_client.get_json` / `get_bytes` — assim pooling, retry
 e cache ficam centralizados em um único lugar.
 
-## 🧪 Testes
+## Testes
+
+```text
+▗     ▗
+▜▘█▌▛▘▜▘█▌▛▘
+▐▖▙▖▄▌▐▖▙▖▄▌
+```
+
 
 ```bash
 pytest                       # unit + API rápidos (sem rede)
@@ -190,7 +233,15 @@ Os testes de integração são pulados por padrão — dependem de acesso à red
 do uptime dos terceiros. Atualmente o projeto tem **34 unit + 15 integration
 tests**, todos verdes.
 
-## 🗺️ Roadmap — próximos passos
+## Roadmap — próximos passos
+
+```text
+       ▌
+▛▘▛▌▀▌▛▌▛▛▌▀▌▛▌
+▌ ▙▌█▌▙▌▌▌▌█▌▙▌
+             ▌
+```
+
 
 - **Deploy** — Dockerfile + `docker-compose` para servidor local em um comando.
 - **CI/CD** — GitHub Actions em cada push; publicação no PyPI em tag.
@@ -202,7 +253,14 @@ tests**, todos verdes.
 - **Cache Redis** — opt-in para cache distribuído em deploys multi-réplica.
 - **SDK TypeScript** — cliente gerado a partir do OpenAPI.
 
-## 🌱 Comunidade
+## Comunidade
+
+```text
+           ▘ ▌   ▌
+▛▘▛▌▛▛▌▌▌▛▌▌▛▌▀▌▛▌█▌
+▙▖▙▌▌▌▌▙▌▌▌▌▙▌█▌▙▌▙▖
+```
+
 
 findata-br é **open-source pra durar** — MIT, sem CLA, sem adotar upstream
 comercial. O roadmap depende de quem usa: se você sentir falta de uma fonte
@@ -212,7 +270,14 @@ comercial. O roadmap depende de quem usa: se você sentir falta de uma fonte
 Qualquer desenvolvedor brasileiro interessado em dados financeiros abertos é
 convidado a hospedar sua própria instância pública e colaborar com PRs.
 
-## 🤝 Contribuindo
+## Contribuindo
+
+```text
+      ▗   ▘▌   ▘   ▌
+▛▘▛▌▛▌▜▘▛▘▌▛▌▌▌▌▛▌▛▌▛▌
+▙▖▙▌▌▌▐▖▌ ▌▙▌▙▌▌▌▌▙▌▙▌
+```
+
 
 Guia completo em [CONTRIBUTING.md](CONTRIBUTING.md). TL;DR:
 
@@ -229,10 +294,17 @@ cobertas por testes. Para novas fontes, adicione testes de integração em
 `tests/test_integration.py` (marcador `integration`). Para o resto, prefira
 unit tests com `respx` que não batem em rede.
 
-## 📜 Licença
+## Licença
+
+```text
+▜ ▘
+▐ ▌▛▘█▌▛▌▛▘▀▌
+▐▖▌▙▖▙▖▌▌▙▖█▌
+```
+
 
 [MIT](LICENSE) — use como quiser.
 
 <div align="center">
-<sub>Feito com ❤️ para o ecossistema de dados abertos do Brasil.</sub>
+<sub>Feito para o ecossistema de dados abertos do Brasil.</sub>
 </div>
