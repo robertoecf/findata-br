@@ -40,6 +40,8 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
     O que você ganha
 ```
 
+---
+
 
 - **API REST** com Swagger interativo em `/docs`.
 - **Servidor MCP** montado automaticamente em `/mcp` — plugue o findata-br direto no Claude, Cursor, Codex.
@@ -54,6 +56,8 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 
     Fontes de dados
 ```
+
+---
 
 
 | Fonte | Domínio | Cobertura | Auth |
@@ -74,6 +78,8 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 
     Instalação
 ```
+
+---
 
 
 Um comando único — todas as 6 fontes (BCB, CVM, B3, IBGE, IPEA, Tesouro) ficam prontas pra usar:
@@ -132,6 +138,8 @@ bash scripts/git/install-hooks.sh # pre-commit + pre-push hooks
 
     Uso
 ```
+
+---
 
 
 ### CLI
@@ -232,6 +240,8 @@ Cursor / Codex pra ela e usar as 27 rotas como tools MCP.
     Arquitetura
 ```
 
+---
+
 
 ```
  findata/
@@ -262,6 +272,8 @@ e cache ficam centralizados em um único lugar.
     Testes
 ```
 
+---
+
 
 ```bash
 pytest                       # unit + API rápidos (sem rede)
@@ -282,6 +294,8 @@ tests**, todos verdes.
     Roadmap — próximos passos
 ```
 
+---
+
 
 - **Deploy** — Dockerfile + `docker-compose` para servidor local em um comando.
 - **CI/CD** — GitHub Actions em cada push; publicação no PyPI em tag.
@@ -301,6 +315,8 @@ tests**, todos verdes.
     Comunidade
 ```
 
+---
+
 
 findata-br é **open-source pra durar** — MIT, sem CLA, sem adotar upstream
 comercial. O roadmap depende de quem usa: se você sentir falta de uma fonte
@@ -317,6 +333,8 @@ convidado a hospedar sua própria instância pública e colaborar com PRs.
 
     Contribuindo
 ```
+
+---
 
 
 Guia completo em [CONTRIBUTING.md](CONTRIBUTING.md). TL;DR:
@@ -341,6 +359,8 @@ unit tests com `respx` que não batem em rede.
 
     Licença
 ```
+
+---
 
 
 [MIT](LICENSE) — use como quiser.
