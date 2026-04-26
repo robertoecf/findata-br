@@ -14,7 +14,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from findata import __version__ as _pkg_version
 from findata._limits import RateLimitExceeded, _rate_limit_exceeded_handler, limiter
-from findata.api.routers import b3, bcb, cvm, ibge, ipea, tesouro
+from findata.api.routers import anbima, b3, bcb, cvm, ibge, ipea, tesouro
 from findata.http_client import MAX_CACHE_SIZE as _CACHE_MAX
 from findata.http_client import _cache as _http_cache
 from findata.http_client import close_client
@@ -44,6 +44,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except ImportError:
         # yfinance not installed — the executor module never loaded.
         pass
+    # Close any cached ANBIMA HTTP clients.
+    from findata.sources.anbima.client import close_default_clients
+
+    await close_default_clients()
 
 
 app = FastAPI(
@@ -87,6 +91,7 @@ app.include_router(tesouro.router)
 app.include_router(ibge.router)
 app.include_router(ipea.router)
 app.include_router(b3.router)
+app.include_router(anbima.router)
 
 
 # ── MCP Server (auto-generated from FastAPI endpoints) ─────────────
@@ -123,6 +128,9 @@ async def root() -> dict[str, object]:
             "ibge": "IBGE (economic indicators)",
             "ipea": "IPEA Data (~8k macro series, long historical coverage)",
             "b3": "B3 (stock quotes via yfinance)",
+        },
+        "sources_with_auth": {
+            "anbima": "ANBIMA (IMA, IHFA, IDA, ETTJ — requires ANBIMA_CLIENT_ID/SECRET)",
         },
     }
 

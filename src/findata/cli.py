@@ -296,6 +296,123 @@ def ibge_ipca(
     rprint(table)
 
 
+# ── ANBIMA commands (require ANBIMA_CLIENT_ID/SECRET env vars) ─────
+
+anbima_app = typer.Typer(
+    help="ANBIMA — IMA, IHFA, IDA, ETTJ (requires ANBIMA_CLIENT_ID/SECRET)",
+    no_args_is_help=True,
+)
+app.add_typer(anbima_app, name="anbima")
+
+
+def _anbima_die_if_misconfigured() -> None:
+    from findata.auth.base import MissingCredentialsError
+    from findata.sources.anbima.credentials import load_anbima_credentials
+
+    try:
+        load_anbima_credentials()
+    except MissingCredentialsError as exc:
+        rprint(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+@anbima_app.command("status")
+def anbima_status() -> None:
+    """Report whether ANBIMA credentials are configured."""
+    from findata.auth.base import MissingCredentialsError
+    from findata.sources.anbima.credentials import load_anbima_credentials
+
+    try:
+        load_anbima_credentials()
+        rprint("[green]ANBIMA credentials configured[/green]")
+    except MissingCredentialsError as exc:
+        rprint(f"[yellow]{exc}[/yellow]")
+        raise typer.Exit(code=1) from exc
+
+
+@anbima_app.command("ima")
+def anbima_ima(
+    family: str = typer.Option("IMA-B", "--family", "-i"),
+    d: str | None = typer.Option(None, "--date", "-d"),
+) -> None:
+    """Fetch an IMA family index for a date (defaults to today)."""
+    _anbima_die_if_misconfigured()
+    from findata.sources.anbima import IMAFamily, get_ima
+
+    dt = date.fromisoformat(d) if d else None
+    data = _run(get_ima(IMAFamily(family), dt))
+    if not data:
+        rprint(f"[yellow]No IMA data for {family} on {dt or 'today'}.[/yellow]")
+        return
+    table = Table(title=f"ANBIMA: {family}")
+    table.add_column("Date", style="cyan")
+    table.add_column("Index", style="green", justify="right")
+    table.add_column("Var %", justify="right")
+    table.add_column("Duration", justify="right")
+    for p in data:
+        table.add_row(
+            p.data_referencia,
+            _fmt(p.valor_indice, ".4f"),
+            _fmt(p.variacao_pct, "+.4f"),
+            _fmt(p.duration, ".2f"),
+        )
+    rprint(table)
+
+
+@anbima_app.command("ihfa")
+def anbima_ihfa(d: str | None = typer.Option(None, "--date", "-d")) -> None:
+    """Fetch the IHFA hedge fund index for a date."""
+    _anbima_die_if_misconfigured()
+    from findata.sources.anbima import get_ihfa
+
+    dt = date.fromisoformat(d) if d else None
+    data = _run(get_ihfa(dt))
+    if not data:
+        rprint("[yellow]No IHFA data.[/yellow]")
+        return
+    table = Table(title="ANBIMA: IHFA")
+    table.add_column("Date", style="cyan")
+    table.add_column("Index", style="green", justify="right")
+    table.add_column("Day %", justify="right")
+    table.add_column("Month %", justify="right")
+    table.add_column("Year %", justify="right")
+    for p in data:
+        table.add_row(
+            p.data_referencia,
+            _fmt(p.valor_indice, ".4f"),
+            _fmt(p.variacao_dia_pct, "+.4f"),
+            _fmt(p.variacao_mes_pct, "+.4f"),
+            _fmt(p.variacao_ano_pct, "+.4f"),
+        )
+    rprint(table)
+
+
+@anbima_app.command("ettj")
+def anbima_ettj(d: str | None = typer.Option(None, "--date", "-d")) -> None:
+    """Fetch the zero-coupon yield curve (estrutura a termo)."""
+    _anbima_die_if_misconfigured()
+    from findata.sources.anbima import get_ettj
+
+    dt = date.fromisoformat(d) if d else None
+    data = _run(get_ettj(dt))
+    if not data:
+        rprint("[yellow]No ETTJ data.[/yellow]")
+        return
+    table = Table(title=f"ANBIMA: ETTJ ({dt or 'today'})")
+    table.add_column("Vértice (du)", style="cyan", justify="right")
+    table.add_column("Pré %", style="green", justify="right")
+    table.add_column("IPCA %", justify="right")
+    table.add_column("Real %", justify="right")
+    for p in data:
+        table.add_row(
+            str(p.vertice),
+            _fmt(p.taxa_pre, ".4f"),
+            _fmt(p.taxa_ipca, ".4f"),
+            _fmt(p.taxa_real, ".4f"),
+        )
+    rprint(table)
+
+
 # ── IPEA commands ──────────────────────────────────────────────────
 
 ipea_app = typer.Typer(help="IPEA Data — macro series catalog", no_args_is_help=True)

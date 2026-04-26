@@ -71,6 +71,17 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
 | **B3** (via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
 
+### Fontes opcionais com credenciais
+
+Estas só ficam ativas se você (operador) configurar credenciais via env var. Sem
+credenciais setadas, as rotas correspondentes retornam `503` com mensagem clara
+do que falta. O core continua 100% sem auth. Detalhes em
+[docs/SOURCES_WITH_AUTH.md](docs/SOURCES_WITH_AUTH.md).
+
+| Fonte | Cobertura | Env vars |
+|---|---|---|
+| **ANBIMA** | IMA (B, S, IRF-M), IHFA, IDA (debêntures), ETTJ (curva zero) | `ANBIMA_CLIENT_ID`, `ANBIMA_CLIENT_SECRET` |
+
 ```text
 ▘    ▗   ▜
 ▌▛▌▛▘▜▘▀▌▐ ▀▌▛▘▀▌▛▌
@@ -164,6 +175,12 @@ findata cvm search Petrobras
 
 findata b3 quote PETR4
 findata b3 history VALE3 -p 1y
+
+# Fontes com credenciais (env vars necessárias)
+findata anbima status
+findata anbima ima -i IMA-B
+findata anbima ihfa
+findata anbima ettj
 
 findata serve                   # sobe o servidor HTTP + MCP
 ```

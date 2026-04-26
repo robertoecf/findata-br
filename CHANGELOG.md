@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — first credentialed source (ANBIMA)
+
+- **`findata.auth`** module — generic `OAuth2ClientCredentials` flow with
+  in-process token cache, `MissingCredentialsError`, and `AuthError`. Designed
+  to be reused by any future credentialed source (SUSEP, BNDES, etc.).
+- **`findata.sources.anbima`** — first user of the auth framework. Covers IMA
+  family, IHFA, IDA, and ETTJ (curva zero). Speaks to ANBIMA's Sensedia
+  gateway with the right `access_token` + `client_id` header pair.
+- **`/anbima/{ima,ihfa,ida,ettj,status}`** routes. Without
+  `ANBIMA_CLIENT_ID`/`ANBIMA_CLIENT_SECRET` set, every route returns a clean
+  `503 credentials_missing` payload pointing to the docs.
+- **CLI: `findata anbima {status,ima,ihfa,ettj}`**.
+- **`docs/SOURCES_WITH_AUTH.md`** — end-to-end guide covering principles,
+  ANBIMA setup steps, and the contributor recipe for adding new credentialed
+  sources.
+- README gains a "Fontes opcionais com credenciais" section that's
+  separate from the core auth-free table.
+
 ### Added — public MCP server ergonomics
 
 - **Rate limiting** via `slowapi` — `FINDATA_RATE_LIMIT_DEFAULT` env var
