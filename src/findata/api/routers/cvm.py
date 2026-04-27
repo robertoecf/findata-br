@@ -7,7 +7,7 @@ from typing import TypeVar
 
 from fastapi import APIRouter, Query
 
-from findata.sources.cvm import companies, financials, funds
+from findata.sources.cvm import companies, financials, funds, holdings, lamina, profile
 
 router = APIRouter(prefix="/cvm", tags=["CVM"])
 
@@ -102,3 +102,91 @@ async def fund_daily(
     **Tip**: Always pass `cnpj` to avoid loading the entire monthly file.
     """
     return _page(await funds.get_fund_daily(year, month, cnpj), skip, limit)
+
+
+# ── CDA — Composição da Carteira ─────────────────────────────────
+
+
+@router.get("/funds/holdings")
+async def fund_holdings(
+    cnpj: str = Query(..., description="Fund CNPJ (mandatory — file is huge)"),
+    year: int = Query(..., ge=2018, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    blocks: str | None = Query(
+        default=None,
+        description="Comma-separated block whitelist (BLC_1..BLC_8, CONFID, PL, FIE)",
+    ),
+) -> list[holdings.FundHolding]:
+    """Fund portfolio (every position) for the given month.
+
+    The CDA monthly file is ~150 MB unzipped, so a CNPJ filter is required.
+    Use `blocks=BLC_1,BLC_4` to limit to specific asset classes.
+    """
+    block_list = [b.strip() for b in blocks.split(",")] if blocks else None
+    return await holdings.get_fund_holdings(cnpj, year, month, block_list)
+
+
+# ── LAMINA — Factsheet ───────────────────────────────────────────
+
+
+@router.get("/funds/lamina")
+async def fund_lamina(
+    year: int = Query(..., ge=2018, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=5000),
+) -> list[lamina.FundLamina]:
+    """Fund regulatory factsheet — strategy, restrictions, alavancagem caps."""
+    return _page(await lamina.get_fund_lamina(year, month, cnpj), skip, limit)
+
+
+@router.get("/funds/lamina/returns/monthly")
+async def fund_lamina_monthly(
+    year: int = Query(..., ge=2018, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+) -> list[lamina.FundLaminaReturnMonth]:
+    """Per-month returns published with the lâmina."""
+    return await lamina.get_fund_monthly_returns(year, month, cnpj)
+
+
+@router.get("/funds/lamina/returns/yearly")
+async def fund_lamina_yearly(
+    year: int = Query(..., ge=2018, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+) -> list[lamina.FundLaminaReturnYear]:
+    """Per-year returns published with the lâmina."""
+    return await lamina.get_fund_yearly_returns(year, month, cnpj)
+
+
+# ── PERFIL_MENSAL — Investor breakdown ───────────────────────────
+
+
+@router.get("/funds/profile")
+async def fund_profile(
+    year: int = Query(..., ge=2018, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[profile.FundProfile]:
+    """Investor profile breakdown (cotistas por tipo) for the given month."""
+    return _page(await profile.get_fund_profile(year, month, cnpj), skip, limit)
+
+
+# ── Period discovery ─────────────────────────────────────────────
+
+
+@router.get("/funds/periods")
+async def fund_periods(
+    product: str = Query(
+        default="INF_DIARIO",
+        description="One of: INF_DIARIO, CDA, LAMINA, PERFIL_MENSAL, BALANCETE, EVENTUAL, EXTRATO",
+    ),
+) -> list[str]:
+    """List the YYYYMM (or YYYY) stamps actually available upstream."""
+    from findata.sources.cvm import _directory
+
+    return await _directory.list_periods("FI", f"DOC/{product}")

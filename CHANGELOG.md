@@ -6,6 +6,53 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — CVM fund deep dive
+
+Three new CVM fund products on top of the existing catalog + daily NAV:
+
+- **`get_fund_holdings(cnpj, year, month)`** — full portfolio (CDA file).
+  Every position the fund holds, classified by CVM block (BLC_1 títulos
+  públicos, BLC_2 cotas de fundos, BLC_4 ações/debêntures, BLC_8
+  disponibilidades, etc., plus CONFID / PL / FIE). The monthly zip is
+  ~150 MB unzipped, so a CNPJ filter is required and we line-stream
+  every block in-place. Optional `blocks=` whitelist.
+- **`get_fund_lamina(year, month, cnpj=None)`** plus
+  `get_fund_monthly_returns()` and `get_fund_yearly_returns()` — the
+  regulatory factsheet (lâmina) with strategy, restrições, alavancagem
+  caps, plus per-month and per-year returns vs benchmark.
+- **`get_fund_profile(year, month, cnpj=None)`** — perfil mensal:
+  cotistas count broken down by type (PF private/varejo, PJ
+  financeira/não-financeira, banco, corretora).
+
+### Added — period discovery via HTML scrape
+
+- **`findata.sources.cvm.list_files / list_periods / latest_period`** —
+  scrapes `https://dados.cvm.gov.br/dados/<cat>/<product>/DADOS/`
+  directly so we don't hard-code year ranges that go stale. New
+  `/cvm/funds/periods?product=...` route exposes it.
+- Pattern lifted from `gabrielguarisa/brdata`'s `_get_table_links`,
+  reimplemented async-native against our shared httpx client.
+
+### Added — CLI
+
+- `findata cvm holdings <CNPJ> -y YYYY -m MM [--blocks BLC_1,BLC_4]`
+- `findata cvm lamina <CNPJ> -y YYYY -m MM`
+- `findata cvm profile <CNPJ> -y YYYY -m MM`
+
+### Tests
+
+- `tests/test_cvm_funds.py` — 9 respx-mocked tests covering directory
+  listing, block-label decoding, CDA filter + whitelist, lâmina main +
+  monthly + yearly returns, perfil filter + no-filter passthrough.
+- 57 unit tests pass total (was 48). ruff + mypy --strict clean.
+
+### Live smoke
+
+Validated end-to-end against real CVM with `00.280.302/0001-60`
+(Bradesco H FIF — Crédito Privado): 6 holdings (R$ 270M concentrados em
+cotas de outros fundos), lâmina com objetivo CDI + 0% alavancagem, 1491
+cotistas PF varejo + 50 PJ varejo + 24 PF private.
+
 ### Added — ANBIMA as a public-data source
 
 - **`findata.sources.anbima`** — covers IMA family snapshot (IRF-M, IMA-B,

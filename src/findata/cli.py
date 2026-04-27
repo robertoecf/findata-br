@@ -483,6 +483,151 @@ cvm_app = typer.Typer(help="CVM — companies and funds", no_args_is_help=True)
 app.add_typer(cvm_app, name="cvm")
 
 
+@cvm_app.command("holdings")
+def cvm_holdings(
+    cnpj: str = typer.Argument(help="Fund CNPJ (with or without punctuation)"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int = typer.Option(..., "--month", "-m"),
+    blocks: str | None = typer.Option(
+        None,
+        "--blocks",
+        "-b",
+        help="Comma list (BLC_1..BLC_8, CONFID, PL, FIE)",
+    ),
+) -> None:
+    """Show one fund's full portfolio (CDA) for a given YYYY/MM."""
+    from findata.sources.cvm import get_fund_holdings
+
+    block_list = [b.strip() for b in blocks.split(",")] if blocks else None
+    rows = _run(get_fund_holdings(cnpj, year, month, block_list))
+    if not rows:
+        rprint(f"[yellow]No holdings for {cnpj} in {year}-{month:02d}.[/yellow]")
+        return
+    table = Table(title=f"Holdings — {cnpj} — {year}-{month:02d}")
+    table.add_column("Block", style="blue")
+    table.add_column("Tipo Aplicação")
+    table.add_column("Tipo Ativo")
+    table.add_column("Emissor")
+    table.add_column("Qtd", justify="right")
+    table.add_column("VL Mercado R$", style="green", justify="right")
+    table.add_column("Descrição")
+    for h in rows[:200]:
+        table.add_row(
+            h.bloco,
+            (h.tipo_aplicacao or "")[:25],
+            (h.tipo_ativo or "")[:25],
+            (h.emissor or "")[:25],
+            _fmt(h.quantidade_final, ".2f"),
+            _fmt(h.valor_mercado, ",.2f"),
+            (h.descricao or "")[:30],
+        )
+    rprint(table)
+    max_rows = 200
+    if len(rows) > max_rows:
+        rprint(f"[dim](showing {max_rows} of {len(rows)} rows)[/dim]")
+
+
+def _print_lamina_header(f: Any) -> None:
+    rprint(f"[bold]{f.denom_social}[/bold]  ({f.cnpj})")
+    if f.nome_fantasia:
+        rprint(f"  Fantasia: {f.nome_fantasia}")
+    rprint(f"  Ref: {f.dt_referencia}")
+    if f.publico_alvo:
+        rprint(f"  Público alvo: {f.publico_alvo}")
+    if f.objetivo:
+        rprint(f"  Objetivo: {f.objetivo[:200]}")
+    if f.pct_pl_alavancagem is not None:
+        rprint(f"  % PL Alavancagem: {f.pct_pl_alavancagem:.2f}%")
+    if f.pct_pl_ativo_exterior is not None:
+        rprint(f"  % PL Exterior: {f.pct_pl_ativo_exterior:.2f}%")
+    if f.pct_pl_ativo_credito_privado is not None:
+        rprint(f"  % PL Crédito Privado: {f.pct_pl_ativo_credito_privado:.2f}%")
+
+
+def _print_returns_table(title: str, rows: list[Any], columns: list[tuple[str, str]]) -> None:
+    """Print a returns table. ``columns`` is a list of (header, attribute_name)."""
+    if not rows:
+        return
+    table = Table(title=title)
+    for header, _ in columns:
+        table.add_column(header, justify="right", style="cyan")
+    for r in rows:
+        cells: list[str] = []
+        for _, attr in columns:
+            val = getattr(r, attr, None)
+            if isinstance(val, (int, float)):
+                cells.append(_fmt(float(val), "+.4f"))
+            else:
+                cells.append(str(val) if val is not None else "")
+        table.add_row(*cells)
+    rprint(table)
+
+
+@cvm_app.command("lamina")
+def cvm_lamina(
+    cnpj: str = typer.Argument(help="Fund CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int = typer.Option(..., "--month", "-m"),
+) -> None:
+    """Show one fund's regulatory factsheet (lâmina) for a given YYYY/MM."""
+    from findata.sources.cvm import (
+        get_fund_lamina,
+        get_fund_monthly_returns,
+        get_fund_yearly_returns,
+    )
+
+    main = _run(get_fund_lamina(year, month, cnpj))
+    if not main:
+        rprint(f"[yellow]No lâmina for {cnpj} in {year}-{month:02d}.[/yellow]")
+        return
+    _print_lamina_header(main[0])
+
+    monthly = _run(get_fund_monthly_returns(year, month, cnpj))
+    _print_returns_table(
+        "Rentabilidade Mensal",
+        monthly[:24],
+        [("Mês", "mes_competencia"), ("Rent %", "rentabilidade_pct"), ("Bench %", "bench_pct")],
+    )
+
+    yearly = _run(get_fund_yearly_returns(year, month, cnpj))
+    _print_returns_table(
+        "Rentabilidade Anual",
+        yearly,
+        [
+            ("Ano", "ano"),
+            ("Rent %", "rentabilidade_pct"),
+            ("Bench %", "bench_pct"),
+            ("Bench Nome", "bench_nome"),
+        ],
+    )
+
+
+@cvm_app.command("profile")
+def cvm_profile(
+    cnpj: str = typer.Argument(help="Fund CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int = typer.Option(..., "--month", "-m"),
+) -> None:
+    """Show one fund's investor profile breakdown (cotistas por tipo)."""
+    from findata.sources.cvm import get_fund_profile
+
+    rows = _run(get_fund_profile(year, month, cnpj))
+    if not rows:
+        rprint(f"[yellow]No profile for {cnpj} in {year}-{month:02d}.[/yellow]")
+        return
+    p = rows[0]
+    rprint(f"[bold]{p.denom_social}[/bold]  ({p.cnpj})")
+    rprint(f"  Ref: {p.dt_referencia}")
+    rprint("\n  Cotistas:")
+    rprint(f"    PF Private:           {p.cotistas_pf_private or 0:,}")
+    rprint(f"    PF Varejo:            {p.cotistas_pf_varejo or 0:,}")
+    rprint(f"    PJ Não-Financ Private:{p.cotistas_pj_nao_financ_private or 0:,}")
+    rprint(f"    PJ Não-Financ Varejo: {p.cotistas_pj_nao_financ_varejo or 0:,}")
+    rprint(f"    Banco:                {p.cotistas_banco or 0:,}")
+    rprint(f"    Corretora/Distrib:    {p.cotistas_corretora_distrib or 0:,}")
+    rprint(f"    PJ Financeira:        {p.cotistas_pj_financ or 0:,}")
+
+
 @cvm_app.command("search")
 def cvm_search(
     query: str = typer.Argument(help="Company name to search"),

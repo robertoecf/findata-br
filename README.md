@@ -65,7 +65,7 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **BCB SGS** | Banco Central | Selic, CDI, IPCA, IGP-M, câmbio, PIB, desemprego — 18k+ séries temporais | — |
 | **BCB Olinda PTAX** | Banco Central | USD/BRL, EUR/BRL e todas moedas rastreadas; ponto e período | — |
 | **BCB Olinda Focus** | Banco Central | Boletim Focus (semanal) — anual, mensal, Selic, Top-5 | — |
-| **CVM** | Regulador | Empresas registradas, demonstrações DFP/ITR, catálogo de fundos, cota diária de fundos | — |
+| **CVM** | Regulador | Empresas registradas, demonstrações DFP/ITR, catálogo + cota diária de fundos, **composição da carteira (CDA)**, **lâmina + rentabilidade mensal/anual**, **perfil de cotistas** | — |
 | **IBGE Agregados v3** | Instituto de estatística | IPCA detalhado por 10 grupos + 365 subitens, INPC, PIB trimestral | — |
 | **IPEA Data (OData v4)** | Instituto de pesquisa | ~8k séries macro curadas (histórico desde a década de 1940), busca no catálogo, metadados | — |
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
@@ -170,6 +170,11 @@ findata ipea search desemprego  # busca full-text em ~8k séries
 findata ipea get BM12_TJOVER12 -n 12
 
 findata cvm search Petrobras
+
+# Fundos: holdings (CDA), lâmina, perfil de cotistas
+findata cvm holdings 00.280.302/0001-60 -y 2026 -m 3
+findata cvm lamina   00.280.302/0001-60 -y 2026 -m 3
+findata cvm profile  00.280.302/0001-60 -y 2026 -m 3
 
 findata b3 quote PETR4
 findata b3 history VALE3 -p 1y
