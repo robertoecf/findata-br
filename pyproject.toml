@@ -36,6 +36,7 @@ dependencies = [
     "rich>=13.0",
     "slowapi>=0.1.9",
     "yfinance>=0.2.50",
+    "xlrd>=2.0.1",
 ]
 
 [project.optional-dependencies]

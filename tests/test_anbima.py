@@ -1,8 +1,9 @@
-"""ANBIMA source — credentials guard + parsing + API smoke (respx-mocked)."""
+"""ANBIMA public-file source — parsing + API smoke (respx-mocked)."""
 
 from __future__ import annotations
 
-import os
+import re
+from datetime import date
 
 import httpx
 import pytest
@@ -10,169 +11,148 @@ import respx
 from fastapi.testclient import TestClient
 
 from findata.api.app import app
-from findata.auth.base import MissingCredentialsError
 from findata.http_client import clear_cache
-from findata.sources.anbima.client import close_default_clients
-from findata.sources.anbima.credentials import load_anbima_credentials
 from findata.sources.anbima.indices import (
-    _parse_ettj,
-    _parse_ihfa,
-    _parse_ima,
-    _value_array,
+    DEBENTURES_URL,  # noqa: F401 — exported constant, helps type-checking
+    ETTJ_URL,
+    _date_to_iso,
+    _f_br,
+    _ima_cache,
+    get_debentures,
+    get_ettj,
 )
 
 
 @pytest.fixture(autouse=True)
-def _clean_anbima_state(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wipe credentials and cached clients between tests."""
-    monkeypatch.delenv("ANBIMA_CLIENT_ID", raising=False)
-    monkeypatch.delenv("ANBIMA_CLIENT_SECRET", raising=False)
+def _clean_state() -> None:
+    """Wipe HTTP and parsed-data caches between tests."""
     clear_cache()
+    _ima_cache.invalidate()
 
 
-def test_load_credentials_raises_when_missing() -> None:
-    with pytest.raises(MissingCredentialsError) as exc:
-        load_anbima_credentials()
-    assert exc.value.source == "ANBIMA"
-    assert "ANBIMA_CLIENT_ID" in exc.value.env_vars
+# ── Parser unit tests ────────────────────────────────────────────
 
 
-def test_load_credentials_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANBIMA_CLIENT_ID", "  abc  ")
-    monkeypatch.setenv("ANBIMA_CLIENT_SECRET", "  xyz  ")
-    creds = load_anbima_credentials()
-    assert creds.client_id == "abc"
-    assert creds.client_secret == "xyz"
+def test_f_br_parses_brazilian_decimals() -> None:
+    assert _f_br("0,1294") == pytest.approx(0.1294)
+    assert _f_br("1.234,56") == pytest.approx(1234.56)
+    assert _f_br("--") is None
+    assert _f_br("N/D") is None
+    assert _f_br("") is None
+    assert _f_br(None) is None
+    assert _f_br("garbage") is None
 
 
-def test_value_array_unwraps_common_envelopes() -> None:
-    assert _value_array([{"a": 1}]) == [{"a": 1}]
-    assert _value_array({"data": [{"a": 1}]}) == [{"a": 1}]
-    assert _value_array({"results": [{"b": 2}]}) == [{"b": 2}]
-    assert _value_array({"unrecognized": "shape"}) == []
+def test_date_to_iso_normalises_formats() -> None:
+    assert _date_to_iso("26/04/2026") == "2026-04-26"
+    assert _date_to_iso("01/01/2026") == "2026-01-01"
+    assert _date_to_iso("26/04/26") == "2026-04-26"
+    assert _date_to_iso("2026-04-26") == "2026-04-26"
 
 
-def test_parse_ima_handles_camel_and_snake_keys() -> None:
-    p = _parse_ima(
-        {
-            "indice": "IMA-B",
-            "dataReferencia": "2026-04-22",
-            "valorIndice": "12345.67",
-            "variacaoPercentual": 0.42,
-            "duration": 8.7,
-        }
-    )
-    assert p.indice == "IMA-B"
-    assert p.valor_indice == 12345.67
-    assert p.variacao_pct == 0.42
-    assert p.duration == 8.7
+# ── ETTJ ──────────────────────────────────────────────────────────
 
 
-def test_parse_ima_tolerates_missing_fields() -> None:
-    p = _parse_ima({"indice": "IMA-B", "data": "2026-04-22"})
-    assert p.indice == "IMA-B"
-    assert p.data_referencia == "2026-04-22"
-    assert p.valor_indice is None
+_ETTJ_CSV = """24/04/2026;Beta 1;Beta 2;Beta 3;Beta 4;Lambda 1;Lambda 2
+PREFIXADOS;0,12;0,01;-0,03;0,04;0,65;0,28
+IPCA;0,06;0,03;-0,02;0,03;1,47;0,56
 
-
-def test_parse_ihfa_handles_alternate_keys() -> None:
-    p = _parse_ihfa(
-        {
-            "data": "2026-04-22",
-            "valor": 100.5,
-            "variacao_dia_pct": 0.1,
-            "variacao_mes_pct": 1.2,
-            "variacao_ano_pct": 12.3,
-        }
-    )
-    assert p.valor_indice == 100.5
-    assert p.variacao_ano_pct == 12.3
-
-
-def test_parse_ettj_coerces_vertice_to_int() -> None:
-    p = _parse_ettj({"vertice": "252", "taxaPre": "0.115"})
-    assert p.vertice == 252
-    assert p.taxa_pre == 0.115
-
-
-# ── API smoke tests ──────────────────────────────────────────────
-
-
-def test_anbima_status_reports_unconfigured() -> None:
-    client = TestClient(app)
-    r = client.get("/anbima/status")
-    assert r.status_code == 200
-    assert r.json()["configured"] is False
-    assert "ANBIMA_CLIENT_ID" in r.json()["env_vars_required"]
-
-
-def test_anbima_routes_503_when_unconfigured() -> None:
-    client = TestClient(app)
-    r = client.get("/anbima/ima")
-    assert r.status_code == 503
-    body = r.json()["detail"]
-    assert body["error"] == "credentials_missing"
-    assert "ANBIMA_CLIENT_ID" in body["env_vars_required"]
-
-
-def test_anbima_status_reports_configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANBIMA_CLIENT_ID", "test_id")
-    monkeypatch.setenv("ANBIMA_CLIENT_SECRET", "test_secret")
-    client = TestClient(app)
-    r = client.get("/anbima/status")
-    assert r.status_code == 200
-    assert r.json()["configured"] is True
+ETTJ Inflação Implicita (IPCA)
+Vertices;ETTJ IPCA;ETTJ PREF;Inflação Implícita
+126;8,6115;14,0861;5,0405
+252;8,1460;13,8019;5,2298
+1.260;7,6951;13,6947;5,5709
+"""
 
 
 @respx.mock
-async def test_anbima_ima_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ANBIMA_CLIENT_ID", "cid")
-    monkeypatch.setenv("ANBIMA_CLIENT_SECRET", "sec")
-    # Reset the cached client so the new env vars take effect.
-    await close_default_clients()
-
-    respx.post("https://api.anbima.com.br/oauth/access-token").mock(
-        return_value=httpx.Response(201, json={"access_token": "TKN", "expires_in": 3600})
+async def test_ettj_parses_csv_table() -> None:
+    respx.get(ETTJ_URL).mock(
+        return_value=httpx.Response(200, text=_ETTJ_CSV, headers={"Content-Type": "text/csv"})
     )
-    respx.get("https://api.anbima.com.br/feed/precos-indices/v1/indices/ima").mock(
-        return_value=httpx.Response(
-            200,
-            json=[
-                {
-                    "indice": "IMA-B",
-                    "dataReferencia": "2026-04-22",
-                    "valorIndice": 9876.54,
-                    "variacaoPercentual": 0.21,
-                    "duration": 7.5,
-                }
-            ],
-        )
+    pts = await get_ettj(date(2026, 4, 24))
+    assert len(pts) == 3
+    assert pts[0].vertice_du == 126
+    assert pts[0].taxa_ipca_pct == pytest.approx(8.6115)
+    assert pts[0].taxa_pre_pct == pytest.approx(14.0861)
+    assert pts[0].inflacao_implicita_pct == pytest.approx(5.0405)
+    # Thousands-sep handled
+    assert pts[2].vertice_du == 1260
+
+
+# ── Debêntures ────────────────────────────────────────────────────
+
+
+_DEB_TXT = (
+    "ANBIMA - Associação ...\n"
+    "\n"
+    "Código@Nome@Repac./  Venc.@Índice/ Correção@Taxa de Compra@Taxa de Venda@"
+    "Taxa Indicativa@Desvio Padrão@Intervalo Indicativo Minimo@"
+    "Intervalo Indicativo Máximo@PU@% PU Par / % VNE@Duration@% Reune@Referência NTN-B\n"
+    "PETR12@PETROLEO BRASILEIRO S.A.@01/06/2030@DI + 1,5%@1,02@0,63@0,83@0,06@"
+    "0,76@0,89@1027,08@101,84@607,92@5@\n"
+    "VALE13@VALE S.A.@04/10/2027@DI + 2,0%@--@--@--@--@--@--@N/D@27,71@N/D@@\n"
+)
+
+
+@respx.mock
+async def test_debentures_parses_at_separated_txt() -> None:
+    respx.get(re.compile(r"https://.*db\d{6}\.txt")).mock(
+        return_value=httpx.Response(200, text=_DEB_TXT, headers={"Content-Type": "text/plain"})
     )
-    from findata.sources.anbima import IMAFamily, get_ima
-
-    out = await get_ima(IMAFamily.IMA_B)
-    assert len(out) == 1
-    assert out[0].indice == "IMA-B"
-    assert out[0].valor_indice == 9876.54
-
-    # Verify the request actually carried the Sensedia headers
-    last_req = respx.calls.last.request
-    assert last_req.headers["access_token"] == "TKN"
-    assert last_req.headers["client_id"] == "cid"
-
-    await close_default_clients()
+    out = await get_debentures(date(2026, 4, 24))
+    assert len(out) == 2
+    assert out[0].codigo == "PETR12"
+    assert out[0].emissor.startswith("PETROLEO")
+    assert out[0].taxa_indicativa_pct == pytest.approx(0.83)
+    assert out[0].pu == pytest.approx(1027.08)
+    assert out[1].codigo == "VALE13"
+    assert out[1].pu is None  # "N/D" parsed to None
+    assert out[1].taxa_compra_pct is None  # "--"
 
 
-def test_root_endpoint_lists_anbima_in_auth_sources() -> None:
+# ── API smoke ────────────────────────────────────────────────────
+
+
+@respx.mock
+def test_anbima_ettj_endpoint() -> None:
+    respx.get(ETTJ_URL).mock(
+        return_value=httpx.Response(200, text=_ETTJ_CSV, headers={"Content-Type": "text/csv"})
+    )
+    client = TestClient(app)
+    r = client.get("/anbima/ettj?data=2026-04-24")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 3
+    assert body[0]["vertice_du"] == 126
+
+
+@respx.mock
+def test_anbima_debentures_endpoint() -> None:
+    respx.get(re.compile(r"https://.*db\d{6}\.txt")).mock(
+        return_value=httpx.Response(200, text=_DEB_TXT, headers={"Content-Type": "text/plain"})
+    )
+    client = TestClient(app)
+    r = client.get("/anbima/debentures?data=2026-04-24")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 2
+
+
+@respx.mock
+def test_anbima_debentures_filter_by_emissor() -> None:
+    respx.get(re.compile(r"https://.*db\d{6}\.txt")).mock(
+        return_value=httpx.Response(200, text=_DEB_TXT, headers={"Content-Type": "text/plain"})
+    )
+    client = TestClient(app)
+    r = client.get("/anbima/debentures?data=2026-04-24&emissor=Vale")
+    assert r.status_code == 200
+    assert [d["codigo"] for d in r.json()] == ["VALE13"]
+
+
+def test_root_endpoint_lists_anbima_in_main_sources() -> None:
     client = TestClient(app)
     body = client.get("/").json()
-    assert "sources_with_auth" in body
-    assert "anbima" in body["sources_with_auth"]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _final_anbima_cleanup() -> None:
-    """Drop any stale event-loop-bound clients on session exit."""
-    yield
-    if os.environ.get("PYTEST_RUNNING_FINAL_CLEANUP") != "1":
-        os.environ["PYTEST_RUNNING_FINAL_CLEANUP"] = "1"
+    assert "anbima" in body["sources"]
+    # The auth-required block was removed — ANBIMA is fully public now.
+    assert "sources_with_auth" not in body

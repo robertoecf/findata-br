@@ -44,10 +44,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except ImportError:
         # yfinance not installed — the executor module never loaded.
         pass
-    # Close any cached ANBIMA HTTP clients.
-    from findata.sources.anbima.client import close_default_clients
-
-    await close_default_clients()
 
 
 app = FastAPI(
@@ -128,9 +124,7 @@ async def root() -> dict[str, object]:
             "ibge": "IBGE (economic indicators)",
             "ipea": "IPEA Data (~8k macro series, long historical coverage)",
             "b3": "B3 (stock quotes via yfinance)",
-        },
-        "sources_with_auth": {
-            "anbima": "ANBIMA (IMA, IHFA, IDA, ETTJ — requires ANBIMA_CLIENT_ID/SECRET)",
+            "anbima": "ANBIMA (IMA family, ETTJ, debêntures — public file downloads)",
         },
     }
 

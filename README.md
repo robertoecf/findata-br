@@ -70,17 +70,15 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **IPEA Data (OData v4)** | Instituto de pesquisa | ~8k séries macro curadas (histórico desde a década de 1940), busca no catálogo, metadados | — |
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
 | **B3** (via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
+| **ANBIMA** | Mercado | IMA (família IRF-M, IMA-B, IMA-S, IMA-Geral), ETTJ (curva zero), debêntures secundário | — |
 
-### Fontes opcionais com credenciais
-
-Estas só ficam ativas se você (operador) configurar credenciais via env var. Sem
-credenciais setadas, as rotas correspondentes retornam `503` com mensagem clara
-do que falta. O core continua 100% sem auth. Detalhes em
-[docs/SOURCES_WITH_AUTH.md](docs/SOURCES_WITH_AUTH.md).
-
-| Fonte | Cobertura | Env vars |
-|---|---|---|
-| **ANBIMA** | IMA (B, S, IRF-M), IHFA, IDA (debêntures), ETTJ (curva zero) | `ANBIMA_CLIENT_ID`, `ANBIMA_CLIENT_SECRET` |
+> **Nota sobre ANBIMA.** Usamos os arquivos públicos em `www.anbima.com.br/informacoes/*`
+> (XLS / CSV / TXT atualizados diariamente), não a API comercial Sensedia
+> (que exige cadastro institucional). Os números são os mesmos canônicos
+> publicados pela ANBIMA — só servidos como arquivos. Se no futuro alguém
+> da comunidade tiver acesso à API autenticada e quiser contribuir com
+> dados em near-real-time, o framework `findata.auth` segue pronto pra
+> ser reutilizado — veja [docs/SOURCES_WITH_AUTH.md](docs/SOURCES_WITH_AUTH.md).
 
 ```text
 ▘    ▗   ▜
@@ -176,11 +174,10 @@ findata cvm search Petrobras
 findata b3 quote PETR4
 findata b3 history VALE3 -p 1y
 
-# Fontes com credenciais (env vars necessárias)
-findata anbima status
-findata anbima ima -i IMA-B
-findata anbima ihfa
-findata anbima ettj
+findata anbima ima                          # snapshot do dia (todos os índices)
+findata anbima ima -i IMA-B                 # filtra uma família
+findata anbima ettj -d 2026-04-22           # curva zero numa data
+findata anbima debentures -e Petrobras      # debêntures por emissor
 
 findata serve                   # sobe o servidor HTTP + MCP
 ```

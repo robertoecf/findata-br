@@ -1,94 +1,48 @@
-"""ANBIMA API routes — gated by ANBIMA_CLIENT_ID / ANBIMA_CLIENT_SECRET env vars.
+"""ANBIMA API routes — fully public, no credentials required.
 
-If the env vars aren't set, every route returns `503 Service Unavailable`
-with a short hint pointing to the credentials docs. If ANBIMA itself
-returns 401/403, we surface those upstream codes verbatim.
+Backed by ANBIMA's free static-file downloads (`www.anbima.com.br/informacoes/*`),
+not the gated Sensedia API. Same canonical data, just delivered as files.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
 from datetime import date
-from typing import TypeVar
 
-import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 
-from findata.auth.base import AuthError, MissingCredentialsError
 from findata.sources.anbima import indices as anbima
 
-router = APIRouter(prefix="/anbima", tags=["ANBIMA (auth required)"])
-
-_T = TypeVar("_T")
-
-
-def _wrap_auth_errors(exc: Exception) -> HTTPException:
-    """Translate auth/upstream failures into clean HTTP responses."""
-    if isinstance(exc, MissingCredentialsError):
-        return HTTPException(
-            status_code=503,
-            detail={
-                "error": "credentials_missing",
-                "source": exc.source,
-                "env_vars_required": exc.env_vars,
-                "docs": "https://github.com/robertoecf/findata-br/blob/main/docs/SOURCES_WITH_AUTH.md",
-            },
-        )
-    if isinstance(exc, AuthError):
-        return HTTPException(status_code=502, detail=f"upstream auth failed: {exc}")
-    if isinstance(exc, httpx.HTTPStatusError):
-        return HTTPException(
-            status_code=exc.response.status_code,
-            detail=exc.response.text[:500],
-        )
-    return HTTPException(status_code=500, detail=str(exc))
-
-
-async def _safely(coro: Awaitable[_T]) -> _T:
-    try:
-        return await coro
-    except (MissingCredentialsError, AuthError, httpx.HTTPStatusError) as exc:
-        raise _wrap_auth_errors(exc) from exc
+router = APIRouter(prefix="/anbima", tags=["ANBIMA"])
 
 
 @router.get("/ima")
 async def ima(
-    family: anbima.IMAFamily = Query(default=anbima.IMAFamily.IMA_B),
-    data: date | None = Query(default=None),
+    family: anbima.IMAFamily | None = Query(default=None),
 ) -> list[anbima.IMADataPoint]:
-    """Fetch an IMA family index (IMA-B, IMA-S, IRF-M, ...) for a date."""
-    return await _safely(anbima.get_ima(family, data))
+    """Latest IMA snapshot — every family, every sub-index, last published day.
 
-
-@router.get("/ihfa")
-async def ihfa(data: date | None = Query(default=None)) -> list[anbima.IHFADataPoint]:
-    """Fetch the IHFA hedge fund index for a date."""
-    return await _safely(anbima.get_ihfa(data))
-
-
-@router.get("/ida")
-async def ida(data: date | None = Query(default=None)) -> list[anbima.IDADataPoint]:
-    """Fetch the IDA family of debenture indices for a date."""
-    return await _safely(anbima.get_ida(data))
+    ANBIMA's `ima_completo.xls` is a one-day snapshot, so this returns one
+    row per sub-index (e.g. `IRF-M 1`, `IRF-M 1+`, `IRF-M` rolling total).
+    Pass `family` to filter to one index. Cached for 24h.
+    """
+    return await anbima.get_ima(family)
 
 
 @router.get("/ettj")
 async def ettj(data: date | None = Query(default=None)) -> list[anbima.ETTJDataPoint]:
-    """Fetch the zero-coupon yield curve (estrutura a termo) for a date."""
-    return await _safely(anbima.get_ettj(data))
+    """Yield curve (zero coupon) for a reference date."""
+    return await anbima.get_ettj(data)
 
 
-@router.get("/status")
-async def status() -> dict[str, object]:
-    """Report whether ANBIMA credentials are configured (without exposing them)."""
-    from findata.sources.anbima.credentials import load_anbima_credentials
-
-    try:
-        load_anbima_credentials()
-        return {"configured": True}
-    except MissingCredentialsError as exc:
-        return {
-            "configured": False,
-            "env_vars_required": exc.env_vars,
-            "docs": "/docs#/ANBIMA",
-        }
+@router.get("/debentures")
+async def debentures(
+    data: date | None = Query(default=None),
+    emissor: str | None = Query(default=None, description="Substring filter on issuer name"),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[anbima.DebentureQuote]:
+    """Daily secondary-market quotes for outstanding debentures."""
+    rows = await anbima.get_debentures(data)
+    if emissor:
+        needle = emissor.upper()
+        rows = [r for r in rows if needle in r.emissor.upper()]
+    return rows[:limit]

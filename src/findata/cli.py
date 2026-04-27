@@ -296,119 +296,108 @@ def ibge_ipca(
     rprint(table)
 
 
-# ── ANBIMA commands (require ANBIMA_CLIENT_ID/SECRET env vars) ─────
+# ── ANBIMA commands (public file downloads, no auth) ─────────────
 
 anbima_app = typer.Typer(
-    help="ANBIMA — IMA, IHFA, IDA, ETTJ (requires ANBIMA_CLIENT_ID/SECRET)",
+    help="ANBIMA — IMA, ETTJ, debêntures (public file downloads)",
     no_args_is_help=True,
 )
 app.add_typer(anbima_app, name="anbima")
 
 
-def _anbima_die_if_misconfigured() -> None:
-    from findata.auth.base import MissingCredentialsError
-    from findata.sources.anbima.credentials import load_anbima_credentials
-
-    try:
-        load_anbima_credentials()
-    except MissingCredentialsError as exc:
-        rprint(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
-
-
-@anbima_app.command("status")
-def anbima_status() -> None:
-    """Report whether ANBIMA credentials are configured."""
-    from findata.auth.base import MissingCredentialsError
-    from findata.sources.anbima.credentials import load_anbima_credentials
-
-    try:
-        load_anbima_credentials()
-        rprint("[green]ANBIMA credentials configured[/green]")
-    except MissingCredentialsError as exc:
-        rprint(f"[yellow]{exc}[/yellow]")
-        raise typer.Exit(code=1) from exc
-
-
 @anbima_app.command("ima")
 def anbima_ima(
-    family: str = typer.Option("IMA-B", "--family", "-i"),
-    d: str | None = typer.Option(None, "--date", "-d"),
+    family: str | None = typer.Option(None, "--family", "-i"),
 ) -> None:
-    """Fetch an IMA family index for a date (defaults to today)."""
-    _anbima_die_if_misconfigured()
+    """Latest IMA snapshot — every sub-index for the most recent published day."""
     from findata.sources.anbima import IMAFamily, get_ima
 
-    dt = date.fromisoformat(d) if d else None
-    data = _run(get_ima(IMAFamily(family), dt))
+    fam = IMAFamily(family) if family else None
+    data = _run(get_ima(fam))
     if not data:
-        rprint(f"[yellow]No IMA data for {family} on {dt or 'today'}.[/yellow]")
+        rprint(f"[yellow]No IMA data for {family or 'any family'}.[/yellow]")
         return
-    table = Table(title=f"ANBIMA: {family}")
+    table = Table(title=f"ANBIMA: IMA ({family or 'all families'})")
+    table.add_column("Index", style="blue")
     table.add_column("Date", style="cyan")
-    table.add_column("Index", style="green", justify="right")
-    table.add_column("Var %", justify="right")
-    table.add_column("Duration", justify="right")
-    for p in data:
-        table.add_row(
-            p.data_referencia,
-            _fmt(p.valor_indice, ".4f"),
-            _fmt(p.variacao_pct, "+.4f"),
-            _fmt(p.duration, ".2f"),
-        )
-    rprint(table)
-
-
-@anbima_app.command("ihfa")
-def anbima_ihfa(d: str | None = typer.Option(None, "--date", "-d")) -> None:
-    """Fetch the IHFA hedge fund index for a date."""
-    _anbima_die_if_misconfigured()
-    from findata.sources.anbima import get_ihfa
-
-    dt = date.fromisoformat(d) if d else None
-    data = _run(get_ihfa(dt))
-    if not data:
-        rprint("[yellow]No IHFA data.[/yellow]")
-        return
-    table = Table(title="ANBIMA: IHFA")
-    table.add_column("Date", style="cyan")
-    table.add_column("Index", style="green", justify="right")
+    table.add_column("Number Index", style="green", justify="right")
     table.add_column("Day %", justify="right")
     table.add_column("Month %", justify="right")
     table.add_column("Year %", justify="right")
-    for p in data:
+    table.add_column("12m %", justify="right")
+    table.add_column("Duration (du)", justify="right")
+    for p in sorted(data, key=lambda r: r.indice):
         table.add_row(
+            p.indice,
             p.data_referencia,
-            _fmt(p.valor_indice, ".4f"),
+            _fmt(p.numero_indice, ".4f"),
             _fmt(p.variacao_dia_pct, "+.4f"),
             _fmt(p.variacao_mes_pct, "+.4f"),
             _fmt(p.variacao_ano_pct, "+.4f"),
+            _fmt(p.variacao_12m_pct, "+.4f"),
+            _fmt(p.duration_du, ".0f"),
         )
     rprint(table)
 
 
 @anbima_app.command("ettj")
 def anbima_ettj(d: str | None = typer.Option(None, "--date", "-d")) -> None:
-    """Fetch the zero-coupon yield curve (estrutura a termo)."""
-    _anbima_die_if_misconfigured()
+    """Yield curve (zero coupon) for a reference date."""
     from findata.sources.anbima import get_ettj
 
     dt = date.fromisoformat(d) if d else None
     data = _run(get_ettj(dt))
     if not data:
-        rprint("[yellow]No ETTJ data.[/yellow]")
+        rprint(f"[yellow]No ETTJ data for {dt or 'today'}.[/yellow]")
         return
     table = Table(title=f"ANBIMA: ETTJ ({dt or 'today'})")
     table.add_column("Vértice (du)", style="cyan", justify="right")
     table.add_column("Pré %", style="green", justify="right")
     table.add_column("IPCA %", justify="right")
-    table.add_column("Real %", justify="right")
+    table.add_column("Inflação Implícita %", justify="right")
     for p in data:
         table.add_row(
-            str(p.vertice),
-            _fmt(p.taxa_pre, ".4f"),
-            _fmt(p.taxa_ipca, ".4f"),
-            _fmt(p.taxa_real, ".4f"),
+            str(p.vertice_du),
+            _fmt(p.taxa_pre_pct, ".4f"),
+            _fmt(p.taxa_ipca_pct, ".4f"),
+            _fmt(p.inflacao_implicita_pct, ".4f"),
+        )
+    rprint(table)
+
+
+@anbima_app.command("debentures")
+def anbima_debentures(
+    d: str | None = typer.Option(None, "--date", "-d"),
+    emissor: str | None = typer.Option(None, "--emissor", "-e"),
+    n: int = typer.Option(50, "--last", "-n"),
+) -> None:
+    """Daily secondary-market quotes for outstanding debentures."""
+    from findata.sources.anbima import get_debentures
+
+    dt = date.fromisoformat(d) if d else None
+    rows = _run(get_debentures(dt))
+    if emissor:
+        needle = emissor.upper()
+        rows = [r for r in rows if needle in r.emissor.upper()]
+    rows = rows[:n]
+    if not rows:
+        rprint("[yellow]No debenture quotes matched.[/yellow]")
+        return
+    table = Table(title=f"ANBIMA: Debêntures ({dt or 'today'})")
+    table.add_column("Code", style="cyan")
+    table.add_column("Issuer")
+    table.add_column("Maturity", style="blue")
+    table.add_column("Rate Indicative %", style="green", justify="right")
+    table.add_column("PU R$", justify="right")
+    table.add_column("Duration (du)", justify="right")
+    for r in rows:
+        table.add_row(
+            r.codigo,
+            r.emissor[:40],
+            r.repactuacao_vencimento,
+            _fmt(r.taxa_indicativa_pct, ".4f"),
+            _fmt(r.pu, ".2f"),
+            _fmt(r.duration_du, ".0f"),
         )
     rprint(table)
 

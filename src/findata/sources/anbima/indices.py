@@ -1,14 +1,32 @@
-"""ANBIMA indices and curve endpoints — IMA family, IHFA, IDA, ETTJ."""
+"""ANBIMA public indices and curves — IMA, ETTJ, Debêntures.
+
+All data here is fetched from free static files on `www.anbima.com.br`.
+No credentials, no API key, no rate-limit tricks (just the upstream's
+once-a-day refresh cadence).
+"""
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import date
 from enum import StrEnum
 from typing import Any
 
+import xlrd
 from pydantic import BaseModel
 
-from findata.sources.anbima.client import get_default_client
+from findata._cache import TTLCache
+from findata.http_client import get_bytes
+
+# ── URLs ──────────────────────────────────────────────────────────
+
+IMA_HISTORY_URL = "https://www.anbima.com.br/informacoes/ima/arqs/ima_completo.xls"
+ETTJ_URL = "https://www.anbima.com.br/informacoes/est-termo/CZ-down.asp"
+DEBENTURES_URL = "https://www.anbima.com.br/informacoes/merc-sec-debentures/arqs/db{ymd}.txt"
+
+
+# ── Models ────────────────────────────────────────────────────────
 
 
 class IMAFamily(StrEnum):
@@ -24,144 +42,282 @@ class IMAFamily(StrEnum):
 
 class IMADataPoint(BaseModel):
     indice: str
-    data_referencia: str
-    valor_indice: float | None = None
-    variacao_pct: float | None = None
-    duration: float | None = None
-
-
-class IHFADataPoint(BaseModel):
-    data_referencia: str
-    valor_indice: float | None = None
+    data_referencia: str  # YYYY-MM-DD
+    numero_indice: float | None = None
     variacao_dia_pct: float | None = None
     variacao_mes_pct: float | None = None
     variacao_ano_pct: float | None = None
-
-
-class IDADataPoint(BaseModel):
-    indice: str
-    data_referencia: str
-    valor_indice: float | None = None
-    variacao_dia_pct: float | None = None
+    variacao_12m_pct: float | None = None
+    variacao_24m_pct: float | None = None
+    duration_du: float | None = None
+    valor_mercado_rs_mil: float | None = None
+    peso_pct: float | None = None
 
 
 class ETTJDataPoint(BaseModel):
-    data_referencia: str
-    vertice: int  # business days to maturity
-    taxa_pre: float | None = None
-    taxa_ipca: float | None = None
-    taxa_real: float | None = None
+    data_referencia: str  # YYYY-MM-DD
+    vertice_du: int  # business days to maturity
+    taxa_pre_pct: float | None = None
+    taxa_ipca_pct: float | None = None
+    inflacao_implicita_pct: float | None = None
 
 
-# ── Public functions ──────────────────────────────────────────────
+class DebentureQuote(BaseModel):
+    data_referencia: str  # YYYY-MM-DD
+    codigo: str
+    emissor: str
+    repactuacao_vencimento: str
+    indice_correcao: str
+    taxa_compra_pct: float | None = None
+    taxa_venda_pct: float | None = None
+    taxa_indicativa_pct: float | None = None
+    desvio_padrao: float | None = None
+    intervalo_min_pct: float | None = None
+    intervalo_max_pct: float | None = None
+    pu: float | None = None
+    pu_par_pct: float | None = None
+    duration_du: float | None = None
+    pct_reune: float | None = None
+    referencia_ntn_b: str | None = None
 
 
-def _fmt_date(d: date | None) -> str:
-    return (d or date.today()).strftime("%Y-%m-%d")
+# ── Helpers ───────────────────────────────────────────────────────
 
 
-async def get_ima(
-    family: IMAFamily | str = IMAFamily.IMA_B,
-    data_referencia: date | None = None,
-) -> list[IMADataPoint]:
-    """Fetch IMA family index for a reference date."""
-    client = get_default_client()
-    raw = await client.get_json(
-        "/feed/precos-indices/v1/indices/ima",
-        params={"data": _fmt_date(data_referencia)},
-    )
-    rows = _value_array(raw)
-    return [_parse_ima(r) for r in rows if not family or r.get("indice") == str(family)]
+def _f_br(val: str | None) -> float | None:
+    """Parse a Brazilian-formatted decimal ('1.234,56' or '0,1294')."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s or s in {"--", "N/D", "n/d", "-"}:
+        return None
+    s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
-async def get_ihfa(data_referencia: date | None = None) -> list[IHFADataPoint]:
-    """Fetch IHFA (hedge fund index) for a reference date."""
-    client = get_default_client()
-    raw = await client.get_json(
-        "/feed/precos-indices/v1/indices-mais/ihfa",
-        params={"data": _fmt_date(data_referencia)},
-    )
-    return [_parse_ihfa(r) for r in _value_array(raw)]
+_ISO_DATE_PARTS = 3
+_TWO_DIGIT_YEAR_LEN = 2
+_TWO_DIGIT_YEAR_PIVOT = 80  # < 80 → 20xx, >= 80 → 19xx
 
 
-async def get_ida(data_referencia: date | None = None) -> list[IDADataPoint]:
-    """Fetch IDA (debenture index) for a reference date."""
-    client = get_default_client()
-    raw = await client.get_json(
-        "/feed/precos-indices/v1/indices-mais/ida",
-        params={"data": _fmt_date(data_referencia)},
-    )
-    return [_parse_ida(r) for r in _value_array(raw)]
+def _date_to_iso(s: str) -> str:
+    """ANBIMA ships dates as DD/MM/YYYY. Normalise to YYYY-MM-DD."""
+    s = s.strip()
+    if "/" not in s:
+        return s
+    parts = s.split("/")
+    if len(parts) != _ISO_DATE_PARTS:
+        return s
+    d, m, y = parts
+    if len(y) == _TWO_DIGIT_YEAR_LEN:
+        y = ("20" + y) if int(y) < _TWO_DIGIT_YEAR_PIVOT else ("19" + y)
+    return f"{y}-{int(m):02d}-{int(d):02d}"
+
+
+# ── IMA (snapshot of the latest trading day) ─────────────────────
+# The file ANBIMA publishes is named `ima_completo.xls` but it's actually
+# a one-day snapshot of every IMA family — not a multi-year history.
+# Refresh daily; caller filters by family if they want a single index.
+
+_ima_cache: TTLCache[list[IMADataPoint]] = TTLCache(ttl=86400)
+
+_EXCEL_DATE_THRESHOLD = 1000  # any positive float > this is a plausible Excel serial
+_QUADRO_FIRST_DATA_ROW = 3  # row 0..2 is title + headers; data starts at row 3
+
+
+def _excel_float(v: Any) -> float | None:
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    return _f_br(str(v))
+
+
+def _excel_date(book: Any, v: Any) -> str | None:
+    if isinstance(v, (int, float)) and float(v) > _EXCEL_DATE_THRESHOLD:
+        try:
+            tup = xlrd.xldate_as_tuple(float(v), book.datemode)
+        except Exception:
+            return None
+        return f"{tup[0]:04d}-{tup[1]:02d}-{tup[2]:02d}"
+    if isinstance(v, str) and "/" in v:
+        return _date_to_iso(v)
+    return None
+
+
+def _ima_index_name(family: str, sub: Any) -> str | None:
+    """Combine family + subfamily cell into a canonical IMA name.
+
+    'IRF-M', 1.0   -> 'IRF-M 1'
+    'IRF-M', '1+'  -> 'IRF-M 1+'
+    'IMA-B', 'TOTAL' -> 'IMA-B' (rolling total)
+    'IMA-S', ''    -> 'IMA-S'
+    """
+    family = family.strip()
+    if not family:
+        return None
+    if sub is None or sub == "":
+        return family
+    sub_str = str(sub).strip()
+    if sub_str.upper() == "TOTAL":
+        return family
+    # Strip trailing ".0" from numeric subs that came back as floats.
+    if sub_str.endswith(".0"):
+        sub_str = sub_str[:-2]
+    return f"{family} {sub_str}".strip()
+
+
+def _cell(cells: list[Any], idx: int) -> Any:
+    return cells[idx] if idx < len(cells) else None
+
+
+async def _load_ima() -> list[IMADataPoint]:
+    """Parse `ima_completo.xls`'s 'Quadro Resumo' snapshot tab."""
+    raw = await get_bytes(IMA_HISTORY_URL, cache_ttl=86400)
+    book = xlrd.open_workbook(file_contents=raw)
+    if "Quadro Resumo" not in book.sheet_names():
+        return []
+    sheet = book.sheet_by_name("Quadro Resumo")
+    rows: list[IMADataPoint] = []
+    for r in range(_QUADRO_FIRST_DATA_ROW, sheet.nrows):
+        cells = [sheet.cell_value(r, c) for c in range(sheet.ncols)]
+        family = str(_cell(cells, 0) or "").strip()
+        if not family:
+            continue
+        index_name = _ima_index_name(family, _cell(cells, 1))
+        if index_name is None:
+            continue
+        date_iso = _excel_date(book, _cell(cells, 2))
+        if not date_iso:
+            continue
+        rows.append(
+            IMADataPoint(
+                indice=index_name,
+                data_referencia=date_iso,
+                numero_indice=_excel_float(_cell(cells, 3)),
+                variacao_dia_pct=_excel_float(_cell(cells, 4)),
+                variacao_mes_pct=_excel_float(_cell(cells, 5)),
+                variacao_ano_pct=_excel_float(_cell(cells, 6)),
+                variacao_12m_pct=_excel_float(_cell(cells, 7)),
+                variacao_24m_pct=_excel_float(_cell(cells, 8)),
+                duration_du=_excel_float(_cell(cells, 9)),
+                valor_mercado_rs_mil=_excel_float(_cell(cells, 10)),
+                peso_pct=_excel_float(_cell(cells, 11)),
+            )
+        )
+    return rows
+
+
+async def get_ima(family: IMAFamily | str | None = None) -> list[IMADataPoint]:
+    """Latest IMA snapshot, optionally filtered to one family.
+
+    The upstream file is a one-day snapshot, so this returns one row per
+    sub-index (e.g., `IRF-M 1`, `IRF-M 1+`, `IRF-M` rolling total) for the
+    most recent published date. Cached for 24 hours.
+    """
+    rows = await _ima_cache.get_or_load(_load_ima)
+    if family:
+        wanted = str(family)
+        rows = [r for r in rows if r.indice == wanted]
+    return rows
+
+
+# Back-compat aliases — old callers and tests might still import these.
+get_ima_history = get_ima
+get_ima_latest = get_ima
+
+
+# ── ETTJ (curva zero, daily CSV) ─────────────────────────────────
 
 
 async def get_ettj(data_referencia: date | None = None) -> list[ETTJDataPoint]:
-    """Fetch the zero-coupon yield curve (estrutura a termo) for a date."""
-    client = get_default_client()
-    raw = await client.get_json(
-        "/feed/precos-indices/v1/titulos-publicos/curva-zero",
-        params={"data": _fmt_date(data_referencia)},
+    """Yield curve (zero coupon) for a reference date.
+
+    The CSV ANBIMA serves has two stacked sections — Nelson-Siegel-Svensson
+    parameters first, then a `Vertices;ETTJ IPCA;ETTJ PREF;Inflação Implícita`
+    table. We parse the second section.
+    """
+    d = data_referencia or date.today()
+    raw = await get_bytes(
+        f"{ETTJ_URL}?Dt_Ref={d.strftime('%d%m%y')}&saida=csv",
+        cache_ttl=3600,
     )
-    return [_parse_ettj(r) for r in _value_array(raw)]
+    text = raw.decode("latin1", errors="replace")
+    iso = d.strftime("%Y-%m-%d")
+    rows: list[ETTJDataPoint] = []
+    in_table = False
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            in_table = False
+            continue
+        if line.startswith("Vertices"):
+            in_table = True
+            continue
+        if not in_table:
+            continue
+        parts = [p.strip() for p in line.split(";")]
+        if len(parts) < 2:  # noqa: PLR2004
+            continue
+        # First column "Vertices" arrives as "126" or "1.260" (thousands sep)
+        v = parts[0].replace(".", "")
+        try:
+            vert = int(v)
+        except ValueError:
+            continue
+        rows.append(
+            ETTJDataPoint(
+                data_referencia=iso,
+                vertice_du=vert,
+                taxa_ipca_pct=_f_br(parts[1] if len(parts) > 1 else None),
+                taxa_pre_pct=_f_br(parts[2] if len(parts) > 2 else None),  # noqa: PLR2004
+                inflacao_implicita_pct=_f_br(parts[3] if len(parts) > 3 else None),  # noqa: PLR2004
+            )
+        )
+    return rows
 
 
-# ── Parsers ───────────────────────────────────────────────────────
+# ── Debêntures (daily TXT) ───────────────────────────────────────
 
 
-def _value_array(raw: Any) -> list[dict[str, Any]]:
-    """ANBIMA wraps lists in either a top-level array or `{"data": [...]}`."""
-    if isinstance(raw, list):
-        return list(raw)
-    if isinstance(raw, dict):
-        for k in ("data", "value", "results", "indices"):
-            if k in raw and isinstance(raw[k], list):
-                return list(raw[k])
-    return []
-
-
-def _parse_ima(r: dict[str, Any]) -> IMADataPoint:
-    return IMADataPoint(
-        indice=str(r.get("indice", "")),
-        data_referencia=str(r.get("dataReferencia") or r.get("data") or ""),
-        valor_indice=_f(r.get("valorIndice") or r.get("valor")),
-        variacao_pct=_f(r.get("variacaoPercentual") or r.get("variacao_pct")),
-        duration=_f(r.get("duration")),
-    )
-
-
-def _parse_ihfa(r: dict[str, Any]) -> IHFADataPoint:
-    return IHFADataPoint(
-        data_referencia=str(r.get("dataReferencia") or r.get("data") or ""),
-        valor_indice=_f(r.get("valorIndice") or r.get("valor")),
-        variacao_dia_pct=_f(r.get("variacaoDia") or r.get("variacao_dia_pct")),
-        variacao_mes_pct=_f(r.get("variacaoMes") or r.get("variacao_mes_pct")),
-        variacao_ano_pct=_f(r.get("variacaoAno") or r.get("variacao_ano_pct")),
-    )
-
-
-def _parse_ida(r: dict[str, Any]) -> IDADataPoint:
-    return IDADataPoint(
-        indice=str(r.get("indice", "")),
-        data_referencia=str(r.get("dataReferencia") or r.get("data") or ""),
-        valor_indice=_f(r.get("valorIndice") or r.get("valor")),
-        variacao_dia_pct=_f(r.get("variacaoDia") or r.get("variacao_dia_pct")),
-    )
-
-
-def _parse_ettj(r: dict[str, Any]) -> ETTJDataPoint:
-    vertice = r.get("vertice") or r.get("dias") or 0
-    return ETTJDataPoint(
-        data_referencia=str(r.get("dataReferencia") or r.get("data") or ""),
-        vertice=int(vertice) if vertice is not None else 0,
-        taxa_pre=_f(r.get("taxaPre") or r.get("taxa_pre")),
-        taxa_ipca=_f(r.get("taxaIPCA") or r.get("taxa_ipca")),
-        taxa_real=_f(r.get("taxaReal") or r.get("taxa_real")),
-    )
-
-
-def _f(v: Any) -> float | None:
-    if v is None or v == "":
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
+async def get_debentures(data_referencia: date | None = None) -> list[DebentureQuote]:
+    """Daily secondary-market quotes for outstanding debentures."""
+    d = data_referencia or date.today()
+    ymd = d.strftime("%y%m%d")
+    raw = await get_bytes(DEBENTURES_URL.format(ymd=ymd), cache_ttl=3600)
+    text = raw.decode("latin1", errors="replace")
+    iso = d.strftime("%Y-%m-%d")
+    reader = csv.reader(io.StringIO(text), delimiter="@")
+    rows: list[DebentureQuote] = []
+    header_seen = False
+    for cells in reader:
+        if not cells or len(cells) < 14:  # noqa: PLR2004
+            continue
+        if not header_seen:
+            if cells[0].strip().lower().startswith("c") and "nome" in (cells[1] or "").lower():
+                header_seen = True
+            continue
+        rows.append(
+            DebentureQuote(
+                data_referencia=iso,
+                codigo=cells[0].strip(),
+                emissor=cells[1].strip(),
+                repactuacao_vencimento=cells[2].strip(),
+                indice_correcao=cells[3].strip(),
+                taxa_compra_pct=_f_br(cells[4]),
+                taxa_venda_pct=_f_br(cells[5]),
+                taxa_indicativa_pct=_f_br(cells[6]),
+                desvio_padrao=_f_br(cells[7]),
+                intervalo_min_pct=_f_br(cells[8]),
+                intervalo_max_pct=_f_br(cells[9]),
+                pu=_f_br(cells[10]),
+                pu_par_pct=_f_br(cells[11]),
+                duration_du=_f_br(cells[12]),
+                pct_reune=_f_br(cells[13]),
+                referencia_ntn_b=(cells[14].strip() or None) if len(cells) > 14 else None,  # noqa: PLR2004
+            )
+        )
+    return rows

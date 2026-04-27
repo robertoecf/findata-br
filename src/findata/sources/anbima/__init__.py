@@ -1,39 +1,36 @@
-"""ANBIMA Data — credentialed Brazilian financial-market data.
+"""ANBIMA — Brazilian financial markets association data.
 
-Gated behind ANBIMA's developer programme. Set:
-    ANBIMA_CLIENT_ID
-    ANBIMA_CLIENT_SECRET
-…in the environment to enable. Without them, the routes and CLI commands
-that depend on this module return a clean 503 / RuntimeError.
+Public file downloads from `www.anbima.com.br/informacoes/*`. No auth, no
+API key. The same canonical numbers ANBIMA's commercial Sensedia API
+returns, just shipped as daily static files anyone can fetch.
 
-Provides:
-    - IMA family (IMA-B, IMA-S, IRF-M, etc.)
-    - IHFA (hedge fund index)
-    - IDA (debenture indices)
-    - ETTJ (curva a termo / yield curve)
-    - Debêntures (private fixed income)
+Public endpoints:
+    - IMA family (IMA-B, IMA-S, IRF-M, ...)         — full history XLS
+    - ETTJ (Estrutura a Termo, curva zero)          — daily CSV per reference date
+    - Debêntures (mercado secundário)               — daily TXT per reference date
+
+The `client.py` and `credentials.py` modules in this package were part of
+the earlier authenticated-API pivot and are no longer used by these public
+endpoints. They stay so the `findata.auth` framework underneath remains
+reusable for sources that genuinely require auth (SUSEP, BNDES, ...).
 """
 
-from findata.sources.anbima.client import ANBIMAClient, get_default_client
-from findata.sources.anbima.credentials import ANBIMACredentials, load_anbima_credentials
 from findata.sources.anbima.indices import (
+    DebentureQuote,
+    ETTJDataPoint,
     IMADataPoint,
     IMAFamily,
+    get_debentures,
     get_ettj,
-    get_ida,
-    get_ihfa,
     get_ima,
 )
 
 __all__ = [
-    "ANBIMAClient",
-    "ANBIMACredentials",
+    "DebentureQuote",
+    "ETTJDataPoint",
     "IMADataPoint",
     "IMAFamily",
-    "get_default_client",
+    "get_debentures",
     "get_ettj",
-    "get_ida",
-    "get_ihfa",
     "get_ima",
-    "load_anbima_credentials",
 ]

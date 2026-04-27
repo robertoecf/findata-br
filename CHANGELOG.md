@@ -6,23 +6,41 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added — first credentialed source (ANBIMA)
+### Added — ANBIMA as a public-data source
+
+- **`findata.sources.anbima`** — covers IMA family snapshot (IRF-M, IMA-B,
+  IMA-S, IMA-Geral, with sub-indices like `IRF-M 1+`, `IMA-B 5`, etc.), the
+  ETTJ zero-coupon yield curve (Pré, IPCA, inflação implícita per vértice),
+  and daily debentures secondary-market quotes.
+- Implementation reads ANBIMA's free static files at
+  `www.anbima.com.br/informacoes/*` (XLS / CSV / TXT). No credentials, no
+  API keys, no cadastro institucional — same canonical numbers as ANBIMA's
+  commercial Sensedia API, just delivered as files.
+- **Rotas:** `/anbima/{ima,ettj,debentures}`, all public.
+- **CLI:** `findata anbima {ima,ettj,debentures}` (with `--family`,
+  `--date`, `--emissor` filters).
+- **`xlrd>=2.0.1`** added as a core dependency to parse the legacy `.xls`
+  files ANBIMA still publishes.
+
+### Added — auth framework (groundwork for future credentialed sources)
 
 - **`findata.auth`** module — generic `OAuth2ClientCredentials` flow with
-  in-process token cache, `MissingCredentialsError`, and `AuthError`. Designed
-  to be reused by any future credentialed source (SUSEP, BNDES, etc.).
-- **`findata.sources.anbima`** — first user of the auth framework. Covers IMA
-  family, IHFA, IDA, and ETTJ (curva zero). Speaks to ANBIMA's Sensedia
-  gateway with the right `access_token` + `client_id` header pair.
-- **`/anbima/{ima,ihfa,ida,ettj,status}`** routes. Without
-  `ANBIMA_CLIENT_ID`/`ANBIMA_CLIENT_SECRET` set, every route returns a clean
-  `503 credentials_missing` payload pointing to the docs.
-- **CLI: `findata anbima {status,ima,ihfa,ettj}`**.
-- **`docs/SOURCES_WITH_AUTH.md`** — end-to-end guide covering principles,
-  ANBIMA setup steps, and the contributor recipe for adding new credentialed
-  sources.
-- README gains a "Fontes opcionais com credenciais" section that's
-  separate from the core auth-free table.
+  in-process token cache and customisable header conventions for non-spec
+  gateways (Sensedia, etc.). Surfaces `AuthError` and
+  `MissingCredentialsError` for callers.
+- The framework is intentionally unused by the current ANBIMA integration
+  (which is fully public). It stays in the codebase for future sources
+  that genuinely require auth — SUSEP, BNDES, CETIP, etc. The recipe for
+  contributors is documented in `docs/SOURCES_WITH_AUTH.md`.
+
+### Background
+
+We initially shipped ANBIMA as an authenticated integration, validated the
+OAuth2 flow live, but discovered ANBIMA's developer programme isn't
+self-serve — it requires institutional membership or a commercial contract.
+We pivoted to the equivalent public file feeds, which give the same data
+without gating. The auth scaffolding stays so the next genuinely
+credentialed source ships in hours rather than days.
 
 ### Added — public MCP server ergonomics
 
