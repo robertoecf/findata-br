@@ -6,6 +6,82 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — Sprint 1: event streams + B3 official history
+
+Four new high-density public sources, wiring listed-company filings,
+ticker resolution, and authoritative price history into the catalog:
+
+- **`get_ipe(year, cnpj=None, categoria=None)`** — CVM IPE event stream
+  (fatos relevantes, comunicados, atas, calendários, boletins de voto).
+  One row per filing with the original PDF link on CVM's RAD system.
+- **`get_fca_geral / valores_mobiliarios / dri`** — CVM FCA cadastral
+  form. `valores_mobiliarios` is a B3-ticker → CNPJ resolver (e.g.
+  `ticker="PETR4"` → `33.000.167/0001-01`, segmento, dt_inicio_listagem).
+  `geral` carries setor / situação / exercício / website. `dri` is the
+  IR contact card.
+- **`get_cotahist_year/month/day(year, [m], [d], ticker=None)`** — B3
+  COTAHIST official daily-quotes time series (1986+). Fixed-width 245
+  cols, prices stored in cents, parsed line-by-line so the 85 MB
+  annual file streams without RAM bloat. Filters: `ticker`, `market_codes`
+  (CODBDI whitelist — `02` lote padrão, `78`/`82` options, etc.).
+- **`get_index_portfolio(symbol)`** — B3 index composition (IBOV,
+  IBrX-50/100, SMLL, IDIV, IFIX, plus 14 sectoral) via the `indexProxy`
+  JSON endpoint. Returns every constituent with weight (%), share class,
+  and theoretical quantity. Refreshed quarterly.
+
+### Added — CLI (Sprint 1)
+
+- `findata cvm ipe <CNPJ> -y YYYY [--categoria "Fato Relevante"]`
+- `findata cvm ticker <TICKER> -y YYYY` — resolve ticker → company facts
+- `findata b3 cotahist <TICKER> -y YYYY [-m MM] [-d DD]`
+- `findata b3 index <SYMBOL>` — print full theoretical portfolio
+
+### Added — REST routes (Sprint 1)
+
+- `/cvm/companies/ipe`, `/cvm/companies/fca/{geral,securities,dri}`
+- `/b3/cotahist/{year,month,day}/...`, `/b3/indices`, `/b3/indices/{symbol}`
+
+### Fixed — Codex adversarial review (Sprint 1)
+
+Four real bugs caught by a `gpt-5.4 xhigh` peer review against live
+upstream files:
+
+- **COTAHIST FATCOT not applied** — closed-end funds (FNAM11, FNOR11,
+  …) quote prices for a *lot* of FATCOT shares (typically 1000),
+  affecting 584/2.6M records in COTAHIST_A2024. The parser now divides
+  by `FATCOT` so all `preco_*` fields are canonical per-share values.
+  `volume_financeiro` is unchanged (it's already total cash).
+- **B3 indices pagination** — `get_index_portfolio` only fetched page
+  1, silently dropping 22 of ITAG's 222 components. Now loops pages
+  until `totalPages` is reached (capped at 10 pages = 2000 issues).
+- **NBSP / trailing-whitespace stripping** — IPE's free-text fields
+  (`assunto`, `tipo_apresentacao`, …) carry trailing `\xa0` in real
+  CVM data. Optional fields now go through a `_opt()` helper that
+  strips and drops empty (Python's `.strip()` already treats NBSP as
+  whitespace). Same fix applied to FCA for consistency.
+- **`get_cotahist_year()` RAM bomb** — unfiltered annual call would
+  materialise 2.6M Pydantic models. Now requires `ticker` or
+  `market_codes` and raises `ValueError` otherwise. Per-month and
+  per-day calls are unaffected.
+
+### Tests
+
+- `tests/test_cvm_ipe_fca.py` — 9 respx-mocked tests (IPE filter
+  matrix + NBSP regression + FCA geral/securities/DRI).
+- `tests/test_b3_cotahist_indices.py` — 12 respx-mocked tests covering
+  fixed-width parser (cents → reais), **FATCOT-1000 regression**,
+  **unfiltered-annual guard**, **pagination regression**, ticker filter,
+  market-code whitelist, base64 round-trip, Brazilian-decimal weight
+  parsing.
+- 78 unit tests pass (was 57). ruff + ruff-format + mypy --strict clean.
+
+### Live smoke
+
+- Vale (`33.592.510/0001-54`) IPE 2026: 4 fatos relevantes parsed.
+- PETR4 FCA 2025 → CNPJ `33.000.167/0001-01`, Nível 2 segmento.
+- IBOV: 83 ativos, top weight VALE3 11.477%, redutor 14.469.518,98.
+- PETR4 COTAHIST 2024-03 (lote padrão): 20 sessões, prices in R$.
+
 ### Added — CVM fund deep dive
 
 Three new CVM fund products on top of the existing catalog + daily NAV:

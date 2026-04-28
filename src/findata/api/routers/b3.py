@@ -1,18 +1,23 @@
-"""B3 API routes — Stock quotes and history.
+"""B3 API routes — Stock quotes, COTAHIST history, and index portfolios.
 
-yfinance is imported lazily so the rest of the API stays available
-when the optional [b3] extra is not installed.
+``yfinance`` is imported lazily (only on /b3/quote* paths) so the rest
+of the API stays available even when the optional ``[b3]`` extra is not
+installed. COTAHIST and indices use only core deps (httpx + stdlib).
 """
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
+
+from findata.sources.b3 import cotahist, indices
 
 router = APIRouter(prefix="/b3", tags=["B3 - Bolsa"])
 
 _MAX_TICKERS_PER_REQUEST = 20
+_CURRENT_YEAR = date.today().year
 
 
 def _quotes() -> Any:
@@ -80,3 +85,68 @@ async def get_multiple_quotes(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ── COTAHIST — Official daily-quotes time series ─────────────────
+
+
+@router.get("/cotahist/year/{year}")
+async def cotahist_year(
+    year: int,
+    ticker: str | None = Query(default=None, description="CODNEG filter (recommended)"),
+    market_codes: str | None = Query(
+        default=None,
+        description="Comma-separated CODBDI whitelist (02=lote padrão, 96=fracionário…)",
+    ),
+) -> list[cotahist.CotahistTrade]:
+    """Read every COTAHIST record for a year (B3 publishes since 1986).
+
+    Annual files are large (~85 MB unzipped). Pass ``ticker=PETR4`` for
+    single-issuer queries.
+    """
+    codes = [c.strip() for c in market_codes.split(",")] if market_codes else None
+    return await cotahist.get_cotahist_year(year, ticker, codes)
+
+
+@router.get("/cotahist/month/{year}/{month}")
+async def cotahist_month(
+    year: int,
+    month: int = Path(..., ge=1, le=12),
+    ticker: str | None = Query(default=None),
+    market_codes: str | None = Query(default=None),
+) -> list[cotahist.CotahistTrade]:
+    """Read one month of COTAHIST records (faster than annual)."""
+    codes = [c.strip() for c in market_codes.split(",")] if market_codes else None
+    return await cotahist.get_cotahist_month(year, month, ticker, codes)
+
+
+@router.get("/cotahist/day/{year}/{month}/{day}")
+async def cotahist_day(
+    year: int,
+    month: int = Path(..., ge=1, le=12),
+    day: int = Path(..., ge=1, le=31),
+    ticker: str | None = Query(default=None),
+    market_codes: str | None = Query(default=None),
+) -> list[cotahist.CotahistTrade]:
+    """Read a single trading day of COTAHIST records."""
+    codes = [c.strip() for c in market_codes.split(",")] if market_codes else None
+    return await cotahist.get_cotahist_day(year, month, day, ticker, codes)
+
+
+# ── Indices — Composição teórica (IBOV, IBrX, SMLL, IDIV, IFIX…) ──
+
+
+@router.get("/indices")
+async def list_indices() -> dict[str, str]:
+    """List the B3 indices we know how to fetch (symbol → friendly name)."""
+    return await indices.list_known_indices()
+
+
+@router.get("/indices/{symbol}")
+async def index_portfolio(symbol: str) -> indices.IndexPortfolio:
+    """Current theoretical portfolio (composição) of a B3 index.
+
+    Returns every constituent with weight (%), share class, and theoretical
+    quantity. Refreshed quarterly by B3.
+    """
+    return await indices.get_index_portfolio(symbol)

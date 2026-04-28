@@ -65,11 +65,11 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **BCB SGS** | Banco Central | Selic, CDI, IPCA, IGP-M, câmbio, PIB, desemprego — 18k+ séries temporais | — |
 | **BCB Olinda PTAX** | Banco Central | USD/BRL, EUR/BRL e todas moedas rastreadas; ponto e período | — |
 | **BCB Olinda Focus** | Banco Central | Boletim Focus (semanal) — anual, mensal, Selic, Top-5 | — |
-| **CVM** | Regulador | Empresas registradas, demonstrações DFP/ITR, catálogo + cota diária de fundos, **composição da carteira (CDA)**, **lâmina + rentabilidade mensal/anual**, **perfil de cotistas** | — |
+| **CVM** | Regulador | Empresas registradas, demonstrações DFP/ITR, **fatos relevantes/comunicados (IPE)**, **formulário cadastral (FCA — ticker→CNPJ resolver, setor, DRI)**, catálogo + cota diária de fundos, **composição da carteira (CDA)**, **lâmina + rentabilidade mensal/anual**, **perfil de cotistas** | — |
 | **IBGE Agregados v3** | Instituto de estatística | IPCA detalhado por 10 grupos + 365 subitens, INPC, PIB trimestral | — |
 | **IPEA Data (OData v4)** | Instituto de pesquisa | ~8k séries macro curadas (histórico desde a década de 1940), busca no catálogo, metadados | — |
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
-| **B3** (via `yfinance`) | Bolsa | Cotações atuais e histórico OHLC de tickers BOVESPA | — |
+| **B3** | Bolsa | Cotações atuais via `yfinance`, **COTAHIST oficial (1986+)** ano/mês/dia, **composição teórica de índices** (IBOV, IBrX, SMLL, IDIV, IFIX + 14 sectoriais) | — |
 | **ANBIMA** | Mercado | IMA (família IRF-M, IMA-B, IMA-S, IMA-Geral), ETTJ (curva zero), debêntures secundário | — |
 
 > **Nota sobre ANBIMA.** Usamos os arquivos públicos em `www.anbima.com.br/informacoes/*`

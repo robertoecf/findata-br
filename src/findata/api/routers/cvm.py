@@ -7,7 +7,16 @@ from typing import TypeVar
 
 from fastapi import APIRouter, Query
 
-from findata.sources.cvm import companies, financials, funds, holdings, lamina, profile
+from findata.sources.cvm import (
+    companies,
+    fca,
+    financials,
+    funds,
+    holdings,
+    ipe,
+    lamina,
+    profile,
+)
 
 router = APIRouter(prefix="/cvm", tags=["CVM"])
 
@@ -73,6 +82,63 @@ async def get_itr(
 ) -> list[financials.FinancialEntry]:
     """Fetch quarterly financial statements (ITR) from CVM."""
     return _page(await financials.get_itr(year, statement, cnpj), skip, limit)
+
+
+# ── IPE — Fatos relevantes / comunicados ──────────────────────────
+
+
+@router.get("/companies/ipe")
+async def list_ipe(
+    year: int = Query(..., ge=2003, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None, description="Filter by issuer CNPJ"),
+    categoria: str | None = Query(
+        default=None,
+        description='e.g. "Fato Relevante", "Comunicado ao Mercado", "Assembleia"',
+    ),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[ipe.IPEDocument]:
+    """Stream of corporate filings (IPE — Informações Periódicas e Eventuais).
+
+    Each row is one document: fato relevante, comunicado, ata, calendário,
+    boletim de voto a distância, etc. Includes a direct download link to
+    the original PDF on CVM's RAD system.
+    """
+    return _page(await ipe.get_ipe(year, cnpj=cnpj, categoria=categoria), skip, limit)
+
+
+# ── FCA — Formulário Cadastral ────────────────────────────────────
+
+
+@router.get("/companies/fca/geral")
+async def fca_geral(
+    year: int = Query(..., ge=2010, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+) -> list[fca.FCAGeneral]:
+    """Top-level company facts: setor, situação registro, exercício social, website."""
+    return await fca.get_fca_geral(year, cnpj)
+
+
+@router.get("/companies/fca/securities")
+async def fca_securities(
+    year: int = Query(..., ge=2010, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+    ticker: str | None = Query(
+        default=None,
+        description="Optional B3 ticker filter (e.g. PETR4, VALE3)",
+    ),
+) -> list[fca.FCASecurity]:
+    """Issued securities — useful as a B3-ticker → CNPJ resolver."""
+    return await fca.get_fca_valores_mobiliarios(year, cnpj=cnpj, ticker=ticker)
+
+
+@router.get("/companies/fca/dri")
+async def fca_dri(
+    year: int = Query(..., ge=2010, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+) -> list[fca.FCAInvestorRelations]:
+    """Diretor de Relações com Investidores (DRI) — IR contact card."""
+    return await fca.get_fca_dri(year, cnpj)
 
 
 # ── Funds ──────────────────────────────────────────────────────────
