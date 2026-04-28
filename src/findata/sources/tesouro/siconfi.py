@@ -117,6 +117,38 @@ _DemonstrativoRGF = Literal["RGF", "RGF Simplificado"]
 _PoderRGF = Literal["E", "L", "J", "M", "D"]
 # E=Executivo, L=Legislativo, J=Judiciário, M=Ministério Público, D=Defensoria
 
+_VALID_RREO_DEMOS = {"RREO", "RREO Simplificado"}
+_VALID_RGF_DEMOS = {"RGF", "RGF Simplificado"}
+_VALID_PODERES = {"E", "L", "J", "M", "D"}
+
+# IBGE → UF map (states only). Derives UF for municipalities by taking the
+# first two digits of their 7-digit cod_ibge. The API returns ``"BR"`` for
+# states and ``None`` for União, so we always derive locally.
+_IBGE_STATE_UF: dict[int, str] = {
+    11: "RO", 12: "AC", 13: "AM", 14: "RR", 15: "PA", 16: "AP", 17: "TO",
+    21: "MA", 22: "PI", 23: "CE", 24: "RN", 25: "PB", 26: "PE", 27: "AL",
+    28: "SE", 29: "BA",
+    31: "MG", 32: "ES", 33: "RJ", 35: "SP",
+    41: "PR", 42: "SC", 43: "RS",
+    50: "MS", 51: "MT", 52: "GO", 53: "DF",
+}  # fmt: skip
+
+
+def _derive_uf(cod_ibge: int, esfera: str) -> str:
+    """Resolve the entity's UF from cod_ibge.
+
+    SICONFI's raw ``uf`` field is unreliable: it returns ``"BR"`` for the
+    27 states and ``None`` for União. We derive locally instead:
+
+    - ``cod_ibge == 1``: União → ``"BR"``
+    - 2-digit code (11-53): state → look up in :data:`_IBGE_STATE_UF`
+    - 7-digit code: municipality → take first two digits, look up
+    """
+    if cod_ibge == 1 or esfera == "U":
+        return "BR"
+    state_code = cod_ibge if cod_ibge < 100 else cod_ibge // 100_000  # noqa: PLR2004
+    return _IBGE_STATE_UF.get(state_code, "")
+
 
 async def get_rreo(
     year: int,
@@ -136,7 +168,14 @@ async def get_rreo(
             (subset published by small municipalities).
         anexo: Optional annex filter (e.g. ``"RREO-Anexo 01"`` =
             balanço orçamentário, ``"RREO-Anexo 06"`` = resultado primário).
+
+    Raises:
+        ValueError: ``demonstrativo`` outside the documented values.
     """
+    if demonstrativo not in _VALID_RREO_DEMOS:
+        raise ValueError(
+            f"demonstrativo must be one of {sorted(_VALID_RREO_DEMOS)}, got {demonstrativo!r}"
+        )
     params: dict[str, str | int] = {
         "an_exercicio": year,
         "nr_periodo": bimestre,
@@ -144,7 +183,7 @@ async def get_rreo(
         "id_ente": cod_ibge,
     }
     if anexo:
-        params["co_anexo"] = anexo
+        params["no_anexo"] = anexo  # SICONFI param is no_anexo, not co_anexo
     rows = await _paginate(f"{SICONFI_BASE}/rreo", params)
     return [_row_to_account(r) for r in rows]
 
@@ -171,7 +210,16 @@ async def get_rgf(
         demonstrativo: ``"RGF"`` (full) or ``"RGF Simplificado"``.
         anexo: Optional annex filter (e.g. ``"RGF-Anexo 01"`` =
             despesa com pessoal, ``"RGF-Anexo 02"`` = dívida consolidada).
+
+    Raises:
+        ValueError: ``demonstrativo`` or ``poder`` outside documented values.
     """
+    if demonstrativo not in _VALID_RGF_DEMOS:
+        raise ValueError(
+            f"demonstrativo must be one of {sorted(_VALID_RGF_DEMOS)}, got {demonstrativo!r}"
+        )
+    if poder not in _VALID_PODERES:
+        raise ValueError(f"poder must be one of {sorted(_VALID_PODERES)}, got {poder!r}")
     params: dict[str, str | int] = {
         "an_exercicio": year,
         "nr_periodo": quadrimestre,
@@ -180,7 +228,7 @@ async def get_rgf(
         "id_ente": cod_ibge,
     }
     if anexo:
-        params["co_anexo"] = anexo
+        params["no_anexo"] = anexo  # SICONFI param is no_anexo, not co_anexo
     rows = await _paginate(f"{SICONFI_BASE}/rgf", params)
     return [_row_to_account(r) for r in rows]
 
@@ -198,12 +246,18 @@ async def get_entes() -> list[SiconfiEntity]:
         cod = r.get("cod_ibge")
         if cod is None:
             continue
+        cod_int = int(cod)
+        esfera = str(r.get("esfera") or "")
+        # Trust the API's uf only when it's a real 2-char state code that
+        # isn't its sentinel "BR" for states. For União and states, derive.
+        raw_uf = (r.get("uf") or "").strip()
+        uf = raw_uf if raw_uf and raw_uf != "BR" and esfera != "E" else _derive_uf(cod_int, esfera)
         out.append(
             SiconfiEntity(
-                cod_ibge=int(cod),
-                uf=str(r.get("uf") or ""),
+                cod_ibge=cod_int,
+                uf=uf,
                 instituicao=str(r.get("instituicao") or r.get("ente") or ""),
-                esfera=str(r.get("esfera") or ""),
+                esfera=esfera,
                 populacao=int(r["populacao"]) if r.get("populacao") is not None else None,
             )
         )

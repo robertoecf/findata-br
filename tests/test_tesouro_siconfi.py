@@ -116,7 +116,10 @@ async def test_rreo_paginates_until_hasmore_false() -> None:
 
 
 @respx.mock
-async def test_rreo_anexo_filter_passes_through() -> None:
+async def test_rreo_anexo_filter_uses_no_anexo_param() -> None:
+    """Regression — Codex found we were sending ``co_anexo`` but SICONFI's
+    actual parameter is ``no_anexo``. With ``co_anexo`` the API silently
+    ignored the filter and returned 8x the data."""
     payload = {"items": [_rreo_row(anexo="RREO-Anexo 06")], "hasMore": False}
     captured: list[str] = []
 
@@ -126,7 +129,20 @@ async def test_rreo_anexo_filter_passes_through() -> None:
 
     respx.get(re.compile(rf"^{re.escape(SICONFI_BASE)}/rreo")).mock(side_effect=_route)
     await get_rreo(2024, 6, cod_ibge=1, anexo="RREO-Anexo 06")
-    assert "co_anexo=RREO-Anexo+06" in captured[0] or "co_anexo=RREO-Anexo%2006" in captured[0]
+    sent = captured[0]
+    assert "no_anexo=" in sent
+    assert "co_anexo=" not in sent  # the wrong param must NOT appear
+
+
+async def test_rreo_rejects_invalid_demonstrativo() -> None:
+    """Regression — Literal type doesn't validate at runtime; explicit raise."""
+    with pytest.raises(ValueError, match="demonstrativo must be one of"):
+        await get_rreo(2024, 6, cod_ibge=1, demonstrativo="rreo")  # type: ignore[arg-type]
+
+
+async def test_rgf_rejects_invalid_poder() -> None:
+    with pytest.raises(ValueError, match="poder must be one of"):
+        await get_rgf(2024, 3, cod_ibge=1, poder="X")  # type: ignore[arg-type]
 
 
 @respx.mock
@@ -178,3 +194,46 @@ async def test_get_entes_filters_invalid_codes() -> None:
     assert len(entes) == 3
     assert entes[0].cod_ibge == 1
     assert entes[-1].populacao == 12_396_000
+
+
+@respx.mock
+async def test_get_entes_derives_uf_from_ibge_code() -> None:
+    """Regression — Codex found the API returns ``"BR"`` for states and
+    ``None`` for União, so we must derive UF from cod_ibge.
+    """
+    payload = {
+        "items": [
+            # União: API returns uf=None, expect "BR"
+            {"cod_ibge": 1, "uf": None, "instituicao": "Governo Federal", "esfera": "U"},
+            # State São Paulo: API returns uf="BR", expect "SP" (from cod 35)
+            {"cod_ibge": 35, "uf": "BR", "instituicao": "São Paulo", "esfera": "E"},
+            # State Rio: API returns uf="BR", expect "RJ" (from cod 33)
+            {"cod_ibge": 33, "uf": "BR", "instituicao": "Rio de Janeiro", "esfera": "E"},
+            # Municipality São Paulo (3550308): expect "SP" derived from first 2 digits
+            {
+                "cod_ibge": 3550308,
+                "uf": "SP",
+                "instituicao": "São Paulo",
+                "esfera": "M",
+                "populacao": 12_396_000,
+            },
+            # DF municipality Brasília (5300108): API returns uf="DF" — keep it
+            {
+                "cod_ibge": 5300108,
+                "uf": "DF",
+                "instituicao": "Brasília",
+                "esfera": "M",
+            },
+        ],
+        "hasMore": False,
+    }
+    respx.get(re.compile(rf"^{re.escape(SICONFI_BASE)}/entes")).mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    entes = await get_entes()
+    by_code = {e.cod_ibge: e for e in entes}
+    assert by_code[1].uf == "BR"  # União
+    assert by_code[35].uf == "SP"  # São Paulo state
+    assert by_code[33].uf == "RJ"  # Rio state
+    assert by_code[3550308].uf == "SP"  # SP municipality
+    assert by_code[5300108].uf == "DF"  # DF municipality

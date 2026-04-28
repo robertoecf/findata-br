@@ -72,6 +72,32 @@ async def test_arrecadacao_filter_by_year_month() -> None:
 
 
 @respx.mock
+async def test_arrecadacao_parses_brazilian_thousand_decimals() -> None:
+    """Regression — Codex caught _f() returning None for 226.708.856,85
+    (Brazilian decimal with thousand-dot separators), losing real revenue
+    values. The fix strips thousand dots before swapping the decimal comma.
+    """
+    csv = (
+        "Ano;Mês;UF;RECEITA PREVIDENCIÁRIA;ADMINISTRADAS POR OUTROS ÓRGÃOS;\n"
+        "2024;Maio;TO;226.708.856,85;4.694.590,56;\n"
+        "2024;Maio;SP;1500000;320000;\n"  # plain integer (no dots, no commas)
+        "2024;Junho;TO;1.234.567;0,5;\n"  # lone dots = thousand sep; lone comma = decimal
+    )
+    respx.get(ARRECADACAO_URL).mock(
+        return_value=httpx.Response(200, content=csv.encode("iso-8859-1"))
+    )
+    rows = await get_arrecadacao(uf="TO")
+    by_period = {(r.ano, r.mes, r.tributo): r.valor for r in rows}
+    assert by_period[(2024, 5, "RECEITA PREVIDENCIÁRIA")] == 226_708_856.85
+    assert by_period[(2024, 5, "ADMINISTRADAS POR OUTROS ÓRGÃOS")] == 4_694_590.56
+    assert by_period[(2024, 6, "RECEITA PREVIDENCIÁRIA")] == 1_234_567.0
+    assert by_period[(2024, 6, "ADMINISTRADAS POR OUTROS ÓRGÃOS")] == 0.5
+    # Plain integer style still works.
+    sp = await get_arrecadacao(uf="SP")
+    assert next(r.valor for r in sp if r.tributo == "RECEITA PREVIDENCIÁRIA") == 1_500_000.0
+
+
+@respx.mock
 async def test_arrecadacao_handles_empty_cells() -> None:
     csv = (
         "Ano;Mês;UF;IRPF;COFINS;\n"

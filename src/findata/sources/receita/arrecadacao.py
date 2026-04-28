@@ -46,12 +46,25 @@ _MESES_PT = {
 
 
 def _f(v: str | None) -> float | None:
-    """Parse arrecadação cell. Empty / null → None. Values are integers
-    in R$ (no decimal), but we cast to float for forward-compat with
-    new columns that might use decimals."""
+    """Parse arrecadação cell. Brazilian-decimal aware.
+
+    Receita's CSV mixes two number formats:
+    - Plain integer (most rows): ``"1500000"`` → 1500000.0
+    - Full Brazilian decimal: ``"226.708.856,85"`` → 226708856.85
+      (e.g. RECEITA PREVIDENCIÁRIA for some UFs in some months)
+
+    Rule:
+    - if the value contains ``,``, treat ``.`` as thousand separators
+      and ``,`` as the decimal point;
+    - if no ``,``, treat ``.`` as thousand separators (Receita never
+      writes integer values with decimal dots).
+
+    Empty / non-numeric → None.
+    """
     if v is None or not v.strip():
         return None
-    s = v.strip().replace(",", ".")
+    s = v.strip()
+    s = s.replace(".", "").replace(",", ".") if "," in s else s.replace(".", "")
     try:
         return float(s)
     except ValueError:
