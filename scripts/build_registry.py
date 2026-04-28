@@ -47,12 +47,14 @@ B3_INDICES_FOR_TICKERS = ["IBRA", "IBXL", "IBOV", "SMLL", "IDIV", "IFIX"]
 # ── Normalization ─────────────────────────────────────────────────
 
 
-def normalize(s: str | None) -> str:
+def normalize_name(s: str | None) -> str:
     """ASCII-fold + uppercase + collapse non-alphanumerics to single spaces.
 
+    For NAMES (multi-word strings the user might search by). Punctuation like
+    ``S.A.`` or ``& Cia`` becomes word separators, so individual words are
+    independently matchable.
+
     ``"Itaú Unibanco S.A."`` → ``"ITAU UNIBANCO S A"``.
-    Used for the FTS5 ``searchable`` column where we want matchable tokens
-    even when the source data carries Portuguese accents and punctuation.
     """
     if not s:
         return ""
@@ -71,9 +73,40 @@ def normalize(s: str | None) -> str:
     return "".join(out).strip()
 
 
-def make_searchable(parts: list[str | None]) -> str:
-    """Concatenate normalized non-empty parts with single-space separator."""
-    return " ".join(n for n in (normalize(p) for p in parts) if n)
+def normalize_token(s: str | None) -> str:
+    """ASCII-fold + uppercase, strip ALL non-alphanumerics (no spaces).
+
+    For CODES (CNPJ, ticker, cod_cvm, codigo_fip) where we need the value to
+    survive as ONE FTS5 token — splitting a CNPJ on its dots/slash would
+    fragment it into pieces nobody can match exactly.
+
+    ``"33.000.167/0001-01"`` → ``"33000167000101"``.
+    """
+    if not s:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", s)
+    ascii_only = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return "".join(c for c in ascii_only.upper() if c.isalnum())
+
+
+def make_searchable(*, tokens: list[str | None], names: list[str | None]) -> str:
+    """Build the FTS5 ``searchable`` payload for one entity.
+
+    ``tokens`` are codes that must round-trip as single tokens (CNPJ,
+    ticker, cod_cvm). ``names`` are human-readable labels that should be
+    word-tokenized (nome_social, nome_comercial). Both lanes are joined
+    by single spaces — the FTS5 tokenizer takes it from there.
+    """
+    parts: list[str] = []
+    for t in tokens:
+        n = normalize_token(t)
+        if n:
+            parts.append(n)
+    for nm in names:
+        n = normalize_name(nm)
+        if n:
+            parts.append(n)
+    return " ".join(parts)
 
 
 # ── B3 ticker enrichment (best-effort) ────────────────────────────
@@ -95,7 +128,7 @@ async def fetch_b3_ticker_map() -> dict[str, list[str]]:
             print(f"[warn] B3 {idx} fetch failed: {e}", file=sys.stderr)
             continue
         for c in portfolio.componentes:
-            key = normalize(c.nome_ativo)
+            key = normalize_name(c.nome_ativo)
             if not key or not c.ticker:
                 continue
             bucket = name_to_tickers.setdefault(key, [])
@@ -111,7 +144,7 @@ def b3_tickers_for_company(
 ) -> list[str]:
     """Look up tickers by normalized commercial name, fall back to social."""
     for candidate in (nome_comercial, nome_social):
-        key = normalize(candidate)
+        key = normalize_name(candidate)
         if key and key in name_to_tickers:
             return list(name_to_tickers[key])
     return []
@@ -130,7 +163,8 @@ async def build_cvm_companies(
     for c in companies:
         tickers = b3_tickers_for_company(name_to_tickers, c.nome_comercial, c.nome_social)
         searchable = make_searchable(
-            [c.cnpj, c.cod_cvm, c.nome_social, c.nome_comercial, *tickers]
+            tokens=[c.cnpj, c.cod_cvm, *tickers],
+            names=[c.nome_social, c.nome_comercial],
         )
         payload: dict[str, Any] = {
             "cnpj": c.cnpj,
@@ -157,7 +191,7 @@ async def build_cvm_funds(conn: sqlite3.Connection, only_active: bool) -> int:
     funds = await get_fund_catalog(only_active=only_active)
     rows: list[tuple[str, str]] = []
     for f in funds:
-        searchable = make_searchable([f.cnpj, f.nome])
+        searchable = make_searchable(tokens=[f.cnpj], names=[f.nome])
         payload: dict[str, Any] = {
             "cnpj": f.cnpj,
             "nome": f.nome,
@@ -186,7 +220,10 @@ async def build_susep(conn: sqlite3.Connection) -> int:
     empresas = await get_susep_empresas()
     rows: list[tuple[str, str]] = []
     for e in empresas:
-        searchable = make_searchable([e.cnpj, e.codigo_fip, e.nome])
+        searchable = make_searchable(
+            tokens=[e.cnpj, e.codigo_fip],
+            names=[e.nome],
+        )
         payload: dict[str, Any] = {
             "cnpj": e.cnpj,
             "nome": e.nome,
