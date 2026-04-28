@@ -47,6 +47,7 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 - **Servidor MCP** montado automaticamente em `/mcp` — plugue o findata-br direto no Claude, Cursor, Codex.
 - **CLI Python** (`findata ...`) com tabelas ricas e banner animado em TTY.
 - **Biblioteca async** com connection pooling, retry com backoff exponencial e cache LRU de 15 min.
+- **Registry CNPJ ↔ ticker ↔ nome** embarcado no wheel (~50k entidades CVM + SUSEP + B3) — uma query resolve qualquer formato.
 - **Zero autenticação, zero API keys.** Todas as fontes são dados públicos governamentais.
 
 ```text
@@ -70,7 +71,8 @@ _De graça. Sem API key. Sem truques de rate-limit. Só Python._
 | **IPEA Data (OData v4)** | Instituto de pesquisa | ~8k séries macro curadas (histórico desde a década de 1940), busca no catálogo, metadados | — |
 | **Tesouro Transparente** | Tesouro Nacional | Tesouro Direto — preços e taxas históricos | — |
 | **B3** | Bolsa | Cotações atuais via `yfinance`, **COTAHIST oficial (1986+)** ano/mês/dia, **composição teórica de índices** (IBOV, IBrX, SMLL, IDIV, IFIX + 14 sectoriais) | — |
-| **ANBIMA** | Mercado | IMA (família IRF-M, IMA-B, IMA-S, IMA-Geral), ETTJ (curva zero), debêntures secundário | — |
+| **ANBIMA** | Mercado | IMA (família IRF-M, IMA-B, IMA-S, IMA-Geral) snapshot + **histórico via formulário Série Histórica**, ETTJ (curva zero), debêntures secundário | — |
+| **Registry** | Cross-source | **CNPJ ↔ ticker ↔ nome resolver** — SQLite FTS5 embarcado no wheel (~50k entidades CVM+SUSEP+B3); uma query MATCH cobre exato, fragmento e fuzzy | — (offline) |
 
 > **Nota sobre ANBIMA.** Usamos os arquivos públicos em `www.anbima.com.br/informacoes/*`
 > (XLS / CSV / TXT atualizados diariamente), não a API comercial Sensedia
@@ -184,6 +186,13 @@ findata anbima ima -i IMA-B                 # filtra uma família
 findata anbima ettj -d 2026-04-22           # curva zero numa data
 findata anbima debentures -e Petrobras      # debêntures por emissor
 
+# Registry: resolve CNPJ ↔ ticker ↔ nome em qualquer formato
+findata registry lookup 33000167000101       # CNPJ raw → Petrobras (cvm + b3)
+findata registry lookup "33.000.167/0001-01" # CNPJ com máscara → mesmo resultado
+findata registry lookup PETR4                # ticker B3 → Petrobras
+findata registry lookup "porto seguro"       # nome fragmento → SA + SUSEP entities
+findata registry meta                        # build sha + counts por fonte
+
 findata serve                   # sobe o servidor HTTP + MCP
 ```
 
@@ -193,6 +202,7 @@ findata serve                   # sobe o servidor HTTP + MCP
 import asyncio
 from findata.sources.bcb import sgs, ptax, focus
 from findata.sources.ipea import get_series_values
+from findata.registry import lookup
 
 async def main() -> None:
     selic = await sgs.get_series_by_name("selic", n=5)
@@ -208,8 +218,36 @@ async def main() -> None:
     hist = await get_series_values("BM12_TJOVER12", top=12)
     print(hist)
 
+    # Registry — uma chamada resolve qualquer formato de identificador
+    res = await lookup("PETR4")
+    if res.entities:
+        e = res.entities[0]
+        print(f"{e.nome} (CNPJ {e.cnpj}, fontes={e.sources}, tickers={e.tickers})")
+
 asyncio.run(main())
 ```
+
+### Registry — resolver CNPJ / ticker / nome
+
+Um catálogo SQLite embarcado no wheel mapeia ~50.000 entidades brasileiras
+(CVM companies + funds + SUSEP) com enriquecimento opcional de tickers B3.
+Uma única query MATCH resolve:
+
+```python
+from findata.registry import lookup
+
+# Todos esses retornam Petrobras:
+await lookup("33000167000101")        # CNPJ raw
+await lookup("33.000.167/0001-01")    # CNPJ com máscara
+await lookup("PETR4")                 # ticker B3
+await lookup("9512")                  # cod_cvm
+await lookup("petrobras")             # nome (fuzzy)
+```
+
+O `Entity.rank` (BM25) discrimina match exato (~ -10) de match difuso (~ -2),
+útil pra agentes / consumers decidirem confiança. A SQLite é rebuildada
+semanalmente via CI (`.github/workflows/rebuild-registry.yml`) e atualizada
+no PyPI a cada release.
 
 ### API REST
 
@@ -217,6 +255,8 @@ asyncio.run(main())
 findata serve                # http://localhost:8000
 curl http://localhost:8000/bcb/series/name/selic?n=5
 curl 'http://localhost:8000/bcb/focus/annual?indicator=IPCA&top=3'
+curl 'http://localhost:8000/registry/lookup?q=33000167000101'
+curl 'http://localhost:8000/registry/lookup?q=PETR4'
 curl http://localhost:8000/docs     # Swagger UI
 curl http://localhost:8000/redoc    # ReDoc
 ```
