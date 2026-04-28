@@ -53,6 +53,18 @@ def _opt(v: str | None) -> str | None:
     return s if s else None
 
 
+def _row_cnpj(r: dict[str, str]) -> str:
+    """Schema-tolerant CNPJ lookup. CVM renamed ``CNPJ_Fundo`` →
+    ``CNPJ_Fundo_Classe`` somewhere around 2021; pre-2021 zips still use
+    the old form. Same story for ``Nome_Fundo``.
+    """
+    return (r.get("CNPJ_Fundo_Classe") or r.get("CNPJ_Fundo") or "").strip()
+
+
+def _row_nome(r: dict[str, str]) -> str:
+    return (r.get("Nome_Fundo_Classe") or r.get("Nome_Fundo") or "").strip()
+
+
 def _filter_period(
     rows: list[dict[str, str]],
     cnpj: str | None,
@@ -61,7 +73,7 @@ def _filter_period(
     out = rows
     if cnpj:
         target = cnpj.strip()
-        out = [r for r in out if (r.get("CNPJ_Fundo_Classe") or "").strip() == target]
+        out = [r for r in out if _row_cnpj(r) == target]
     if month is not None:
         prefix = f"-{month:02d}-"
         out = [r for r in out if prefix in (r.get("Data_Referencia") or "")]
@@ -120,8 +132,8 @@ class FIIComplement(BaseModel):
 
 def _parse_general(r: dict[str, str]) -> FIIGeneral:
     return FIIGeneral(
-        cnpj=(r.get("CNPJ_Fundo_Classe") or "").strip(),
-        nome_fundo=(r.get("Nome_Fundo_Classe") or "").strip(),
+        cnpj=_row_cnpj(r),
+        nome_fundo=_row_nome(r),
         dt_referencia=(r.get("Data_Referencia") or "").strip(),
         versao=(r.get("Versao") or "").strip(),
         tipo_fundo_classe=_opt(r.get("Tipo_Fundo_Classe")),
@@ -142,7 +154,7 @@ def _parse_general(r: dict[str, str]) -> FIIGeneral:
 
 def _parse_complement(r: dict[str, str]) -> FIIComplement:
     return FIIComplement(
-        cnpj=(r.get("CNPJ_Fundo_Classe") or "").strip(),
+        cnpj=_row_cnpj(r),
         dt_referencia=(r.get("Data_Referencia") or "").strip(),
         versao=(r.get("Versao") or "").strip(),
         valor_ativo=_f(r.get("Valor_Ativo")),

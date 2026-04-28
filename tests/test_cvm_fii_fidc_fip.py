@@ -99,6 +99,48 @@ async def test_fii_geral_filter_by_month() -> None:
 
 
 @respx.mock
+async def test_fii_geral_pre2021_legacy_schema() -> None:
+    """Regression — Codex review: 2019/2020 FII files still use the old
+    ``CNPJ_Fundo`` / ``Nome_Fundo`` columns instead of the post-2021
+    ``CNPJ_Fundo_Classe`` / ``Nome_Fundo_Classe``. Without the fallback
+    the parser would silently return rows with cnpj=""."""
+    legacy_geral = (
+        "Tipo_Fundo;CNPJ_Fundo;Data_Referencia;Versao;Data_Entrega;Nome_Fundo;"
+        "Codigo_ISIN;Mandato;Segmento_Atuacao;Tipo_Gestao;Nome_Administrador\n"
+        "FII;00.332.266/0001-31;2020-12-31;1;2021-02-15;FII LEGACY 2020;"
+        "BRLEGFCTF019;Renda;Lajes;Ativa;BTG\n"
+    )
+    legacy_comp = (
+        "CNPJ_Fundo;Data_Referencia;Versao;Total_Numero_Cotistas;"
+        "Numero_Cotistas_Pessoa_Fisica;Patrimonio_Liquido;Valor_Patrimonial_Cotas\n"
+        "00.332.266/0001-31;2020-12-31;1;1234;1100;50000000,00;100,50\n"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(
+            "inf_mensal_fii_geral_2020.csv",
+            legacy_geral.encode("iso-8859-1"),
+        )
+        zf.writestr(
+            "inf_mensal_fii_complemento_2020.csv",
+            legacy_comp.encode("iso-8859-1"),
+        )
+    respx.get(re.compile(r"https://.*inf_mensal_fii_2020\.zip")).mock(
+        return_value=httpx.Response(200, content=buf.getvalue())
+    )
+
+    geral = await get_fii_geral(2020, cnpj="00.332.266/0001-31")
+    assert len(geral) == 1
+    assert geral[0].cnpj == "00.332.266/0001-31"
+    assert geral[0].nome_fundo == "FII LEGACY 2020"
+
+    comp = await get_fii_complemento(2020, cnpj="00.332.266/0001-31")
+    assert len(comp) == 1
+    assert comp[0].cnpj == "00.332.266/0001-31"
+    assert comp[0].patrimonio_liquido == 50_000_000.00
+
+
+@respx.mock
 async def test_fii_complemento_parses_pl_and_cotistas() -> None:
     respx.get(re.compile(r"https://.*inf_mensal_fii_2026\.zip")).mock(
         return_value=httpx.Response(200, content=_make_fii_zip())
@@ -333,6 +375,15 @@ async def test_fip_filter_by_quarter() -> None:
     assert len(q2) == 1
     assert q2[0].dt_referencia == "2023-06-30"
     assert q2[0].patrimonio_liquido == 520_000_000.0
+
+
+async def test_fip_rejects_invalid_quarter() -> None:
+    """Regression — Codex review: ``quarter=5`` used to silently widen
+    scope to the entire year. Now raises ValueError."""
+    with pytest.raises(ValueError, match="quarter must be 1-4"):
+        await get_fip(2023, quarter=5)
+    with pytest.raises(ValueError, match="quarter must be 1-4"):
+        await get_fip(2023, quarter=0)
 
 
 @respx.mock

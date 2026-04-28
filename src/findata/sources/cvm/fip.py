@@ -151,6 +151,8 @@ async def get_fip(
             CSV row in ``raw`` so callers can access the 20+ extra columns
             we don't model explicitly.
     """
+    if quarter is not None and quarter not in {1, 2, 3, 4}:
+        raise ValueError(f"quarter must be 1-4, got {quarter}")
     rows = await fetch_csv(FIP_URL.format(year=year))
     if cnpj:
         target = cnpj.strip()
@@ -158,7 +160,6 @@ async def get_fip(
     if quarter is not None:
         # Quarters end on -03-31, -06-30, -09-30, -12-31 (DT_COMPTC).
         end_months = {1: "-03-", 2: "-06-", 3: "-09-", 4: "-12-"}
-        prefix = end_months.get(quarter)
-        if prefix:
-            rows = [r for r in rows if prefix in (r.get("DT_COMPTC") or "")]
+        prefix = end_months[quarter]
+        rows = [r for r in rows if prefix in (r.get("DT_COMPTC") or "")]
     return [_parse(r, include_raw=include_raw) for r in rows]
