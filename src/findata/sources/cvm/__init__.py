@@ -2,7 +2,16 @@
 
 Listed-company data + investment funds.
 
-Funds (FI / FIF) coverage:
+Listed-company (CIA_ABERTA) coverage:
+
+| Module           | Product (CVM)                                 | Cadence    |
+|------------------|-----------------------------------------------|------------|
+| `companies.py`   | Companies registry                            | static     |
+| `financials.py`  | DFP (annual) / ITR (quarterly) statements     | yearly/qtr |
+| `ipe.py`         | IPE — fatos relevantes / comunicados / atas   | event      |
+| `fca.py`         | FCA — formulário cadastral (geral / VM / DRI) | yearly     |
+
+Fund (FI / FIF) coverage:
 
 | Module             | Product (CVM)                                | Cadence           |
 |--------------------|----------------------------------------------|-------------------|
@@ -19,6 +28,14 @@ from findata.sources.cvm._directory import (
     list_periods,
 )
 from findata.sources.cvm.companies import Company, get_companies, search_company
+from findata.sources.cvm.fca import (
+    FCAGeneral,
+    FCAInvestorRelations,
+    FCASecurity,
+    get_fca_dri,
+    get_fca_geral,
+    get_fca_valores_mobiliarios,
+)
 from findata.sources.cvm.financials import (
     FinancialEntry,
     StatementType,
@@ -27,6 +44,7 @@ from findata.sources.cvm.financials import (
 )
 from findata.sources.cvm.funds import Fund, FundDaily, get_fund_catalog, get_fund_daily
 from findata.sources.cvm.holdings import FundHolding, get_fund_holdings
+from findata.sources.cvm.ipe import IPEDocument, get_ipe
 from findata.sources.cvm.lamina import (
     FundLamina,
     FundLaminaReturnMonth,
@@ -39,6 +57,9 @@ from findata.sources.cvm.profile import FundProfile, get_fund_profile
 
 __all__ = [
     "Company",
+    "FCAGeneral",
+    "FCAInvestorRelations",
+    "FCASecurity",
     "FinancialEntry",
     "Fund",
     "FundDaily",
@@ -47,9 +68,13 @@ __all__ = [
     "FundLaminaReturnMonth",
     "FundLaminaReturnYear",
     "FundProfile",
+    "IPEDocument",
     "StatementType",
     "get_companies",
     "get_dfp",
+    "get_fca_dri",
+    "get_fca_geral",
+    "get_fca_valores_mobiliarios",
     "get_fund_catalog",
     "get_fund_daily",
     "get_fund_holdings",
@@ -57,6 +82,7 @@ __all__ = [
     "get_fund_monthly_returns",
     "get_fund_profile",
     "get_fund_yearly_returns",
+    "get_ipe",
     "get_itr",
     "latest_period",
     "list_files",

@@ -219,6 +219,85 @@ def b3_history(
     rprint(table)
 
 
+@b3_app.command("cotahist")
+def b3_cotahist(
+    ticker: str = typer.Argument(help="B3 ticker (e.g. PETR4)"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int | None = typer.Option(None, "--month", "-m"),
+    day: int | None = typer.Option(None, "--day", "-d"),
+) -> None:
+    """B3 COTAHIST — official daily history. With --month or --day for finer slices."""
+    from findata.sources.b3 import (
+        get_cotahist_day,
+        get_cotahist_month,
+        get_cotahist_year,
+    )
+
+    if day is not None and month is not None:
+        rows = _run(get_cotahist_day(year, month, day, ticker=ticker))
+        title = f"{ticker.upper()} — {year}-{month:02d}-{day:02d}"
+    elif month is not None:
+        rows = _run(get_cotahist_month(year, month, ticker=ticker))
+        title = f"{ticker.upper()} — {year}-{month:02d}"
+    else:
+        rows = _run(get_cotahist_year(year, ticker=ticker))
+        title = f"{ticker.upper()} — {year}"
+
+    if not rows:
+        rprint(f"[yellow]No COTAHIST data for {ticker} in {title.split('—')[1].strip()}.[/yellow]")
+        return
+
+    table = Table(title=title)
+    table.add_column("Date", style="cyan")
+    table.add_column("Open", justify="right")
+    table.add_column("High", justify="right", style="green")
+    table.add_column("Low", justify="right", style="red")
+    table.add_column("Close", justify="right", style="bold")
+    table.add_column("Vol R$", justify="right")
+    max_shown = 60
+    for r in rows[-max_shown:]:
+        table.add_row(
+            r.data,
+            f"{r.preco_abertura:.2f}",
+            f"{r.preco_maximo:.2f}",
+            f"{r.preco_minimo:.2f}",
+            f"{r.preco_ultimo:.2f}",
+            f"{r.volume_financeiro:,.0f}",
+        )
+    rprint(table)
+    if len(rows) > max_shown:
+        rprint(f"[dim](showing last {max_shown} of {len(rows)} sessions)[/dim]")
+
+
+@b3_app.command("index")
+def b3_index(
+    symbol: str = typer.Argument(help="Index symbol (e.g. IBOV, IBXL, SMLL, IDIV, IFIX)"),
+) -> None:
+    """Show current theoretical portfolio of a B3 index."""
+    from findata.sources.b3 import get_index_portfolio
+
+    p = _run(get_index_portfolio(symbol))
+    if not p.componentes:
+        rprint(f"[yellow]No data for index {symbol}.[/yellow]")
+        return
+    rprint(f"[bold]{p.nome}[/bold]  ({p.indice})  ·  {p.data}  ·  {len(p.componentes)} ativos")
+    table = Table(title=f"{p.indice} — composição teórica")
+    table.add_column("Ticker", style="cyan")
+    table.add_column("Ativo")
+    table.add_column("Classe", style="dim")
+    table.add_column("Peso %", justify="right", style="bold")
+    table.add_column("Qtd Teórica", justify="right")
+    for c in p.componentes:
+        table.add_row(
+            c.ticker,
+            c.nome_ativo,
+            c.classe,
+            f"{c.peso_pct:.3f}" if c.peso_pct is not None else "-",
+            f"{c.qtd_teorica:,}" if c.qtd_teorica is not None else "-",
+        )
+    rprint(table)
+
+
 # ── Tesouro commands ───────────────────────────────────────────────
 
 tesouro_app = typer.Typer(help="Tesouro Direto treasury bonds", no_args_is_help=True)
@@ -626,6 +705,61 @@ def cvm_profile(
     rprint(f"    Banco:                {p.cotistas_banco or 0:,}")
     rprint(f"    Corretora/Distrib:    {p.cotistas_corretora_distrib or 0:,}")
     rprint(f"    PJ Financeira:        {p.cotistas_pj_financ or 0:,}")
+
+
+@cvm_app.command("ipe")
+def cvm_ipe(
+    cnpj: str = typer.Argument(help="Issuer CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    categoria: str | None = typer.Option(None, "--categoria", "-c"),
+) -> None:
+    """List IPE corporate filings (fatos relevantes / comunicados / atas)."""
+    from findata.sources.cvm import get_ipe
+
+    rows = _run(get_ipe(year, cnpj=cnpj, categoria=categoria))
+    if not rows:
+        rprint(f"[yellow]No IPE filings for {cnpj} in {year}.[/yellow]")
+        return
+    table = Table(title=f"IPE filings — {rows[0].nome_empresa} ({year})")
+    table.add_column("Date", style="cyan")
+    table.add_column("Categoria")
+    table.add_column("Tipo")
+    table.add_column("Espécie / Assunto")
+    max_shown = 50
+    for d in rows[:max_shown]:
+        subject = d.especie or d.assunto or ""
+        table.add_row(d.dt_referencia, d.categoria, d.tipo or "-", subject)
+    rprint(table)
+    if len(rows) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(rows)} — filter by --categoria)[/dim]")
+
+
+@cvm_app.command("ticker")
+def cvm_ticker(
+    ticker: str = typer.Argument(help="B3 ticker (e.g. PETR4, VALE3, ITUB4)"),
+    year: int = typer.Option(..., "--year", "-y"),
+) -> None:
+    """Resolve a B3 ticker → CNPJ + company facts via FCA."""
+    from findata.sources.cvm import get_fca_geral, get_fca_valores_mobiliarios
+
+    securities = _run(get_fca_valores_mobiliarios(year, ticker=ticker))
+    if not securities:
+        rprint(f"[yellow]No security '{ticker}' found in FCA {year}.[/yellow]")
+        return
+    s = securities[0]
+    rprint(f"[bold]{s.nome_empresarial}[/bold]  ({s.cnpj})")
+    rprint(f"  Ticker:   {s.codigo_negociacao}")
+    rprint(f"  Tipo:     {s.valor_mobiliario}")
+    rprint(f"  Mercado:  {s.mercado}  ·  Segmento: {s.segmento or '-'}")
+    rprint(f"  Listada:  {s.dt_inicio_listagem or '-'}  →  {s.dt_fim_listagem or 'atual'}")
+    geral = _run(get_fca_geral(year, cnpj=s.cnpj))
+    if geral:
+        g = geral[0]
+        rprint(f"\n  Setor:    {g.setor_atividade or '-'}")
+        rprint(f"  Atividade: {g.descricao_atividade or '-'}")
+        rprint(f"  Controle: {g.especie_controle_acionario or '-'}")
+        rprint(f"  Situação: {g.situacao_emissor or '-'}  ·  Registro: {g.situacao_registro_cvm}")
+        rprint(f"  Site:     {g.pagina_web or '-'}")
 
 
 @cvm_app.command("search")

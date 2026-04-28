@@ -1,9 +1,28 @@
 """B3 — Brasil, Bolsa, Balcão (stock exchange data).
 
-Uses yfinance for stock quotes (tickers with .SA suffix).
-Install the optional dependency:  pip install findata-br[b3]
+| Module        | Source                                  | Cadence              |
+|---------------|-----------------------------------------|----------------------|
+| `quotes.py`   | Yahoo Finance (via yfinance)            | live + intraday      |
+| `cotahist.py` | B3 SerHist fixed-width archive (1986+)  | annual / month / day |
+| `indices.py`  | B3 indexProxy JSON portfolio endpoint   | live (current quart) |
+
+The optional ``[b3]`` extra installs ``yfinance`` for live quotes.
+``cotahist`` and ``indices`` use only stdlib + httpx (already in core).
 """
 
+from findata.sources.b3.cotahist import (
+    CotahistTrade,
+    get_cotahist_day,
+    get_cotahist_month,
+    get_cotahist_year,
+)
+from findata.sources.b3.indices import (
+    KNOWN_INDICES,
+    IndexConstituent,
+    IndexPortfolio,
+    get_index_portfolio,
+    list_known_indices,
+)
 from findata.sources.b3.quotes import (
     StockHistoryPoint,
     StockQuote,
@@ -13,9 +32,18 @@ from findata.sources.b3.quotes import (
 )
 
 __all__ = [
+    "KNOWN_INDICES",
+    "CotahistTrade",
+    "IndexConstituent",
+    "IndexPortfolio",
     "StockHistoryPoint",
     "StockQuote",
+    "get_cotahist_day",
+    "get_cotahist_month",
+    "get_cotahist_year",
     "get_history",
+    "get_index_portfolio",
     "get_multiple_quotes",
     "get_quote",
+    "list_known_indices",
 ]
