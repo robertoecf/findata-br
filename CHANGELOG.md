@@ -6,6 +6,73 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-28
+
+Cross-source CNPJ resolver — embedded SQLite registry shipped inside the
+wheel. Single FTS5 `MATCH` query handles CNPJ (with or without mask),
+B3 ticker, CVM code, SUSEP FIP code, and fuzzy name lookups uniformly,
+with BM25 rank discriminating exact-match from fuzzy.
+
+Sprint 5.5 (parallel) added BCB SGS catalog expansion (17 → 71 named
+series) and ANBIMA IMA historical fetcher.
+
+### Added
+
+- **`findata.registry`** — read-only async store over the embedded
+  `registry.sqlite` (~50k entities: CVM companies, CVM funds, SUSEP).
+  Functions: `lookup(query, limit)` and `get_meta()`. Pydantic models
+  `Entity` (with BM25 `rank`) and `LookupResult`.
+- **REST endpoints**: `GET /registry/lookup?q=...&limit=...` and
+  `GET /registry/meta`. Auto-exposed as MCP tools via `fastapi-mcp`.
+- **CLI**: `findata registry lookup <query>` and `findata registry meta`.
+  Rich table output with rank interpretation footnote.
+- **`scripts/build_registry.py`** — offline regenerator that pulls from
+  CVM (companies + funds), SUSEP, and B3 (index portfolios for ticker
+  enrichment). Writes the canonical SQLite + meta KV table including
+  `content_sha256` for CI no-op detection.
+- **`.github/workflows/rebuild-registry.yml`** — weekly cron (Mon 06:00
+  UTC) that rebuilds the registry and opens a PR if content hash differs.
+  Manual `workflow_dispatch` trigger for ad-hoc regeneration.
+- **BCB SGS catalog**: 17 → 71 named series — inflation breakdown
+  (livres / monitorados / serviços / bens / núcleos), monetary aggregates
+  (M1–M4), credit (saldo SFN, inadimplência, spread), external sector
+  (balança, conta corrente, IDP, reservas), public sector (DBGG, primário,
+  juros nominais), confidence (ICC FGV, ICEI CNI), and more.
+- **ANBIMA IMA history**: `get_ima_history(family, start, end)` fetches
+  historical IMA data points via ANBIMA's "Série Histórica" form
+  (`ima-sh-down.asp` POST), validated against 14 years of data. Bounded
+  concurrency, holiday-aware (handles "Não há dados disponíveis" banner),
+  per-date 24h cache.
+- **`aiosqlite >= 0.20`** added to core deps (pure Python, ~50KB).
+
+### Fixed
+
+- `scripts/build_registry.py` token normalization split: codes (CNPJ,
+  ticker, cod_cvm) collapse punctuation, names preserve word boundaries.
+  Without this fix, masked CNPJ `"33.000.167/0001-01"` fragmented into
+  five tokens and exact CNPJ search returned 0 hits.
+- `_normalize_query` produces `(spaced) OR (joined)` for inputs with
+  punctuation — masked CNPJ resolves the same as bare digits.
+
+### Known limitations (v1)
+
+- B3 ticker enrichment misses entities where B3's `nome_ativo` differs
+  from CVM's `nome_comercial` (e.g. `ITAUUNIBANCO` vs `ITAU UNIBANCO`).
+  v2 candidate: fuzzy match or B3 endpoint exposing `cod_cvm` directly.
+- CVM funds dataset (`cad_fi.csv`) is dominated by `CANCELADA` entries
+  (46,566 of 46,810). Likely a legacy endpoint; consumers can filter via
+  `extra.situacao` in the payload.
+- Same legal entity may appear under multiple `cod_cvm` records, causing
+  duplicate hits on CNPJ lookups. v2: dedupe on CNPJ at build time.
+
+### Stats
+
+- Tests: 117 → **168** (+51)
+- REST endpoints: 73 → **75** (+2)
+- Wheel size: 4.2 MB compressed (28 MB uncompressed; sqlite compresses
+  heavily inside the zip)
+- Registry build time: ~5 seconds against live BCB/CVM/SUSEP/B3
+
 ## [0.2.0] — 2026-04-28
 
 Massive expansion of the public-data catalog across four sprints, each

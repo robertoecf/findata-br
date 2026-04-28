@@ -7,21 +7,29 @@ once-a-day refresh cadence).
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
-from datetime import date
+import logging
+import ssl
+import time
+from datetime import date, timedelta
 from enum import StrEnum
 from typing import Any
 
+import httpx
 import xlrd
 from pydantic import BaseModel
 
 from findata._cache import TTLCache
 from findata.http_client import get_bytes
 
+logger = logging.getLogger(__name__)
+
 # ── URLs ──────────────────────────────────────────────────────────
 
 IMA_HISTORY_URL = "https://www.anbima.com.br/informacoes/ima/arqs/ima_completo.xls"
+IMA_HISTORY_DOWNLOAD_URL = "https://www.anbima.com.br/informacoes/ima/ima-sh-down.asp"
 ETTJ_URL = "https://www.anbima.com.br/informacoes/est-termo/CZ-down.asp"
 DEBENTURES_URL = "https://www.anbima.com.br/informacoes/merc-sec-debentures/arqs/db{ymd}.txt"
 
@@ -225,9 +233,205 @@ async def get_ima(family: IMAFamily | str | None = None) -> list[IMADataPoint]:
     return rows
 
 
-# Back-compat aliases — old callers and tests might still import these.
-get_ima_history = get_ima
+# Back-compat alias — old callers / tests may still import this.
 get_ima_latest = get_ima
+
+
+# ── IMA historical series (one CSV per business day) ────────────
+# ANBIMA's "Série Histórica" form (https://www.anbima.com.br/informacoes/ima/ima-sh.asp)
+# POSTs to ``ima-sh-down.asp`` and returns a CSV (latin-1, ``;`` delimited)
+# with one IMA snapshot for the requested calendar day. Non-business days
+# return the literal banner ``Não há dados disponíveis para [DATE] !``.
+
+_IMA_NO_DATA_MARKER = "não há dados"
+_IMA_HISTORY_CONCURRENCY = 8
+_IMA_HISTORY_TIMEOUT = 30.0
+_IMA_HISTORY_CACHE_TTL = 86400.0
+_IMA_HISTORY_HEADER_NEEDLE = "data de refer"  # locates the column-header row
+_SATURDAY = 5
+_SUNDAY = 6
+_IMA_CSV_MIN_FIELDS = 11  # core schema (Index .. Carteira) — newer files add more
+
+# Per-date result cache: iso_date -> (loaded_at, rows). Cached entries are
+# whole-day snapshots from ANBIMA, immutable once published, so 24h TTL is safe.
+_ima_history_cache: dict[str, tuple[float, list[IMADataPoint]]] = {}
+
+
+def _ima_history_cache_get(iso: str) -> list[IMADataPoint] | None:
+    entry = _ima_history_cache.get(iso)
+    if entry is None:
+        return None
+    loaded_at, rows = entry
+    if time.time() - loaded_at >= _IMA_HISTORY_CACHE_TTL:
+        del _ima_history_cache[iso]
+        return None
+    return rows
+
+
+def _ima_history_cache_set(iso: str, rows: list[IMADataPoint]) -> None:
+    _ima_history_cache[iso] = (time.time(), rows)
+
+
+def _ima_history_cache_clear() -> None:
+    _ima_history_cache.clear()
+
+
+def _ima_history_ssl_context() -> Any:
+    """Mirror ``http_client._ssl_context`` (kept private over there)."""
+    try:
+        import truststore
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        return ssl.create_default_context()
+
+
+def _parse_ima_history_csv(text: str, expected_iso: str) -> list[IMADataPoint]:
+    """Parse the ``ima-sh-down.asp`` CSV payload for one reference day.
+
+    The payload is wrapped with a banner row and a header row. The header
+    column order is (positionally): Índice, Data, Número, Var Dia, Var Mês,
+    Var Ano, Var 12m, Var 24m, Peso, Duration, Carteira (R$ mil), and seven
+    optional trailing fields (number of trades, volumes, PMR, convexity,
+    yield, redemption yield) we don't model.
+    """
+    if not text or _IMA_NO_DATA_MARKER in text.lower():
+        return []
+    rows: list[IMADataPoint] = []
+    in_data = False
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if not in_data:
+            # Skip everything until we see the header row.
+            if _IMA_HISTORY_HEADER_NEEDLE in s.lower() and ";" in s:
+                in_data = True
+            continue
+        parts = [p.strip() for p in s.split(";")]
+        if len(parts) < _IMA_CSV_MIN_FIELDS:
+            continue
+        family = parts[0]
+        if not family or family.upper().startswith("TOTAIS"):
+            continue
+        date_iso = _date_to_iso(parts[1]) if parts[1] else expected_iso
+        rows.append(
+            IMADataPoint(
+                indice=family,
+                data_referencia=date_iso,
+                numero_indice=_f_br(parts[2]),
+                variacao_dia_pct=_f_br(parts[3]),
+                variacao_mes_pct=_f_br(parts[4]),
+                variacao_ano_pct=_f_br(parts[5]),
+                variacao_12m_pct=_f_br(parts[6]),
+                variacao_24m_pct=_f_br(parts[7]),
+                peso_pct=_f_br(parts[8]),
+                duration_du=_f_br(parts[9]),
+                valor_mercado_rs_mil=_f_br(parts[10]),
+            )
+        )
+    return rows
+
+
+async def _post_ima_history_csv(client: httpx.AsyncClient, d: date) -> str | None:
+    """POST the form for date ``d`` and return the decoded payload (or None)."""
+    payload = {
+        "Tipo": "",
+        "DataRef": "",
+        "Pai": "ima",
+        "escolha": "2",
+        "Idioma": "PT",
+        "saida": "csv",
+        "Dt_Ref": d.strftime("%d/%m/%Y"),
+        "Dt_Ref_Ver": d.strftime("%Y%m%d"),
+    }
+    try:
+        resp = await client.post(IMA_HISTORY_DOWNLOAD_URL, data=payload)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.warning("IMA history fetch failed for %s: HTTP %s", d, exc.response.status_code)
+        return None
+    except httpx.HTTPError as exc:
+        logger.warning("IMA history fetch failed for %s: %s", d, exc)
+        return None
+    return resp.content.decode("latin1", errors="replace")
+
+
+async def _fetch_ima_for_date(client: httpx.AsyncClient, d: date) -> list[IMADataPoint]:
+    """Return the IMA snapshot for one calendar day (cached for 24 h)."""
+    iso = d.strftime("%Y-%m-%d")
+    cached = _ima_history_cache_get(iso)
+    if cached is not None:
+        return cached
+    text = await _post_ima_history_csv(client, d)
+    if text is None:
+        return []
+    rows = _parse_ima_history_csv(text, iso)
+    if not rows:
+        # No-data days (weekends, holidays, dates before IMA inception) are
+        # cached as empty so we don't re-hit ANBIMA on every backtest call.
+        logger.debug("No IMA data published for %s", iso)
+    _ima_history_cache_set(iso, rows)
+    return rows
+
+
+def _iter_candidate_days(start: date, end: date) -> list[date]:
+    """All calendar days in ``[start, end]`` excluding weekends.
+
+    Brazilian bank holidays still get probed (and skipped on no-data); we
+    don't carry a holiday calendar here to avoid a runtime dependency.
+    """
+    if end < start:
+        return []
+    days: list[date] = []
+    cur = start
+    while cur <= end:
+        if cur.weekday() not in (_SATURDAY, _SUNDAY):
+            days.append(cur)
+        cur += timedelta(days=1)
+    return days
+
+
+async def get_ima_history(
+    family: IMAFamily | str | None,
+    start: date,
+    end: date,
+) -> list[IMADataPoint]:
+    """Historical IMA series across a date range.
+
+    One snapshot per business day in ``[start, end]``. Optionally filtered
+    to a single ``family`` (e.g. ``IMAFamily.IMA_B`` or the literal string
+    ``"IMA-B 5"``); pass ``None`` to keep every sub-index. Days with no
+    published data (weekends, holidays, pre-inception) are silently skipped.
+
+    Each daily fetch is cached for 24 hours and concurrent fetches are
+    capped at 8 to stay polite with ANBIMA's static-file server.
+    """
+    if end < start:
+        return []
+    wanted = str(family).strip().lower() if family else None
+
+    sem = asyncio.Semaphore(_IMA_HISTORY_CONCURRENCY)
+    async with httpx.AsyncClient(
+        timeout=_IMA_HISTORY_TIMEOUT,
+        headers={"User-Agent": "findata-br/0.1 (+https://github.com/robertoecf/findata-br)"},
+        verify=_ima_history_ssl_context(),
+    ) as client:
+
+        async def _one(d: date) -> list[IMADataPoint]:
+            async with sem:
+                return await _fetch_ima_for_date(client, d)
+
+        results = await asyncio.gather(*(_one(d) for d in _iter_candidate_days(start, end)))
+
+    out: list[IMADataPoint] = []
+    for daily in results:
+        for r in daily:
+            if wanted is not None and r.indice.lower() != wanted:
+                continue
+            out.append(r)
+    out.sort(key=lambda r: r.data_referencia)
+    return out
 
 
 # ── ETTJ (curva zero, daily CSV) ─────────────────────────────────
