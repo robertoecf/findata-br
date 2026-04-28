@@ -707,6 +707,105 @@ def cvm_profile(
     rprint(f"    PJ Financeira:        {p.cotistas_pj_financ or 0:,}")
 
 
+@cvm_app.command("fii")
+def cvm_fii(
+    cnpj: str = typer.Argument(help="FII CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int | None = typer.Option(None, "--month", "-m"),
+) -> None:
+    """Show one FII's cadastral + complement facets."""
+    from findata.sources.cvm import get_fii_complemento, get_fii_geral
+
+    geral = _run(get_fii_geral(year, cnpj=cnpj, month=month))
+    if not geral:
+        rprint(f"[yellow]No FII data for {cnpj} in {year}.[/yellow]")
+        return
+    g = geral[0]
+    rprint(f"[bold]{g.nome_fundo}[/bold]  ({g.cnpj})")
+    rprint(f"  Segmento: {g.segmento_atuacao or '-'}")
+    rprint(f"  Mandato:  {g.mandato or '-'}")
+    rprint(f"  Gestão:   {g.tipo_gestao or '-'}")
+    rprint(f"  Admin:    {g.nome_administrador or '-'}")
+    rprint(f"  ISIN:     {g.isin or '-'}")
+
+    comp = _run(get_fii_complemento(year, cnpj=cnpj, month=month))
+    if comp:
+        c = comp[-1]  # most recent month if multiple
+        rprint(f"\n  Ref:      {c.dt_referencia}")
+        if c.patrimonio_liquido:
+            rprint(f"  PL:       R$ {c.patrimonio_liquido:,.0f}")
+        if c.valor_patrimonial_cotas:
+            rprint(f"  VP cota:  R$ {c.valor_patrimonial_cotas:.2f}")
+        rprint(f"  Cotistas: {c.total_cotistas or 0:,}  (PF {c.cotistas_pf or 0:,})")
+
+
+@cvm_app.command("fidc")
+def cvm_fidc(
+    cnpj: str = typer.Argument(help="FIDC CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int = typer.Option(..., "--month", "-m"),
+) -> None:
+    """Show one FIDC's PL + direitos creditórios."""
+    from findata.sources.cvm import (
+        get_fidc_direitos_creditorios,
+        get_fidc_geral,
+        get_fidc_pl,
+    )
+
+    geral = _run(get_fidc_geral(year, month, cnpj=cnpj))
+    if not geral:
+        rprint(f"[yellow]No FIDC data for {cnpj} in {year}-{month:02d}.[/yellow]")
+        return
+    g = geral[0]
+    rprint(f"[bold]{g.nome_fundo}[/bold]  ({g.cnpj})")
+    rprint(f"  Ref:    {g.dt_referencia}")
+    rprint(f"  Tipo:   {g.tipo_fundo_classe or '-'}  ·  Classe: {g.classe or '-'}")
+    rprint(f"  Admin:  {g.nome_administrador or '-'}")
+
+    pl = _run(get_fidc_pl(year, month, cnpj=cnpj))
+    if pl:
+        p = pl[0]
+        rprint(f"\n  PL final:  R$ {p.pl_final:,.0f}" if p.pl_final else "  PL final:  -")
+        rprint(f"  PL médio:  R$ {p.pl_medio:,.0f}" if p.pl_medio else "  PL médio:  -")
+
+    dc = _run(get_fidc_direitos_creditorios(year, month, cnpj=cnpj))
+    if dc:
+        d = dc[0]
+        rprint("\n  Direitos creditórios:")
+        if d.valor_com_risco:
+            rprint(f"    Com risco:    R$ {d.valor_com_risco:,.0f}")
+        if d.valor_sem_risco:
+            rprint(f"    Sem risco:    R$ {d.valor_sem_risco:,.0f}")
+
+
+@cvm_app.command("fip")
+def cvm_fip(
+    cnpj: str = typer.Argument(help="FIP CNPJ"),
+    year: int = typer.Option(..., "--year", "-y"),
+    quarter: int | None = typer.Option(None, "--quarter", "-q", min=1, max=4),
+) -> None:
+    """Show one FIP's quarterly informe."""
+    from findata.sources.cvm import get_fip
+
+    rows = _run(get_fip(year, cnpj=cnpj, quarter=quarter))
+    if not rows:
+        rprint(f"[yellow]No FIP data for {cnpj} in {year}.[/yellow]")
+        return
+    r = rows[-1]
+    rprint(f"[bold]{r.nome_fundo}[/bold]  ({r.cnpj})")
+    rprint(f"  Ref:           {r.dt_referencia}")
+    if r.patrimonio_liquido:
+        rprint(f"  PL:            R$ {r.patrimonio_liquido:,.0f}")
+    if r.valor_patrimonial_cota:
+        rprint(f"  VP cota:       R$ {r.valor_patrimonial_cota:,.4f}")
+    rprint(f"  Cotistas:      {r.num_cotistas or 0:,}")
+    if r.capital_comprometido:
+        rprint(f"  Cap comprom.:  R$ {r.capital_comprometido:,.0f}")
+    if r.capital_integralizado:
+        rprint(f"  Cap integr.:   R$ {r.capital_integralizado:,.0f}")
+    rprint(f"  Classe cota:   {r.classe_cota or '-'}")
+
+
 @cvm_app.command("ipe")
 def cvm_ipe(
     cnpj: str = typer.Argument(help="Issuer CNPJ"),
