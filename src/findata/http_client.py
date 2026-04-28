@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ssl
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -104,6 +105,24 @@ _client: httpx.AsyncClient | None = None
 _client_loop_id: int | None = None
 
 
+def _ssl_context() -> Any:
+    """SSL context that trusts the OS keystore in addition to certifi.
+
+    Some Brazilian government sites (SUSEP, parts of Receita) sign their
+    certs with the ICP-Brasil chain, which isn't in certifi's bundle but
+    *is* in macOS / Linux / WSL system keystores. Using ``truststore``
+    when available falls through to the system trust store; otherwise we
+    use Python's stdlib default (which on most systems also reads the
+    OS bundle via ssl.create_default_context()).
+    """
+    try:
+        import truststore
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def _get_client() -> httpx.AsyncClient:
     global _client, _client_loop_id
     try:
@@ -116,6 +135,7 @@ def _get_client() -> httpx.AsyncClient:
             timeout=30,
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
             headers={"User-Agent": "findata-br/0.1 (+https://github.com/robertoecf/findata-br)"},
+            verify=_ssl_context(),
         )
         _client_loop_id = loop_id
     return _client
@@ -173,6 +193,7 @@ async def get_bytes(
     async with httpx.AsyncClient(
         timeout=120,
         headers={"User-Agent": "findata-br/0.1 (+https://github.com/robertoecf/findata-br)"},
+        verify=_ssl_context(),
     ) as dl_client:
 
         async def _do() -> bytes:

@@ -437,6 +437,103 @@ def receita_arrecadacao(
         rprint(f"[dim](showing {max_shown} of {len(rows)} — narrow with --tributo)[/dim]")
 
 
+# ── ANEEL commands ────────────────────────────────────────────────
+
+aneel_app = typer.Typer(help="ANEEL — energy-auction results", no_args_is_help=True)
+app.add_typer(aneel_app, name="aneel")
+
+
+@aneel_app.command("leiloes")
+def aneel_leiloes(
+    year: int | None = typer.Option(None, "--year", "-y"),
+    fonte: str | None = typer.Option(None, "--fonte", "-f"),
+    uf: str | None = typer.Option(None, "--uf"),
+    tipo: str = typer.Option("geracao", "--tipo", "-t", help="geracao | transmissao"),
+) -> None:
+    """List ANEEL energy-auction results."""
+    from findata.sources.aneel import get_aneel_leiloes_geracao, get_aneel_leiloes_transmissao
+
+    if tipo == "transmissao":
+        rows = _run(get_aneel_leiloes_transmissao(year=year, uf=uf))
+        if not rows:
+            rprint("[yellow]No transmission auctions matched.[/yellow]")
+            return
+        table = Table(title=f"ANEEL leilões transmissão{f' {year}' if year else ''}")
+        table.add_column("Ano", style="cyan", justify="right")
+        table.add_column("Empreendimento")
+        table.add_column("UF", style="dim")
+        table.add_column("Km", justify="right")
+        table.add_column("RAP R$/ano", justify="right", style="bold")
+        table.add_column("Vencedor")
+        max_shown = 40
+        for r in rows[-max_shown:]:
+            km = f"{r.extensao_linha_km:,.0f}" if r.extensao_linha_km else "-"
+            rap = f"{r.rap_vencedor_brl:,.0f}" if r.rap_vencedor_brl else "-"
+            table.add_row(
+                str(r.ano_leilao or "-"),
+                (r.nome_empreendimento or "")[:50],
+                r.uf or "-",
+                km,
+                rap,
+                (r.nome_vencedor or "")[:30],
+            )
+        rprint(table)
+    else:
+        rows_g = _run(get_aneel_leiloes_geracao(year=year, fonte=fonte, uf=uf))
+        if not rows_g:
+            rprint("[yellow]No generation auctions matched.[/yellow]")
+            return
+        table = Table(title=f"ANEEL leilões geração{f' {year}' if year else ''}")
+        table.add_column("Ano", style="cyan", justify="right")
+        table.add_column("Empreendimento")
+        table.add_column("Fonte")
+        table.add_column("MW", justify="right")
+        table.add_column("Preço R$/MWh", justify="right", style="bold")
+        table.add_column("Vencedor")
+        max_shown = 40
+        for g in rows_g[-max_shown:]:
+            mw = f"{g.potencia_instalada_mw:,.0f}" if g.potencia_instalada_mw else "-"
+            preco = f"{g.preco_leilao_brl_mwh:.2f}" if g.preco_leilao_brl_mwh else "-"
+            table.add_row(
+                str(g.ano_leilao or "-"),
+                (g.nome_empreendimento or "")[:35],
+                (g.fonte_energia or "")[:15],
+                mw,
+                preco,
+                (g.empresa_vencedora or "")[:25],
+            )
+        rprint(table)
+
+
+# ── SUSEP commands ────────────────────────────────────────────────
+
+susep_app = typer.Typer(help="SUSEP — supervised insurance entities", no_args_is_help=True)
+app.add_typer(susep_app, name="susep")
+
+
+@susep_app.command("search")
+def susep_search(
+    query: str = typer.Argument(help="Substring of entity name"),
+) -> None:
+    """Search SUSEP-supervised entities by name."""
+    from findata.sources.susep import search_susep_empresa
+
+    results = _run(search_susep_empresa(query))
+    if not results:
+        rprint("[yellow]No entities matched.[/yellow]")
+        return
+    table = Table(title=f"SUSEP empresas matching '{query}'")
+    table.add_column("FIP", style="cyan", justify="right")
+    table.add_column("CNPJ")
+    table.add_column("Nome")
+    max_shown = 50
+    for e in results[:max_shown]:
+        table.add_row(e.codigo_fip, e.cnpj, e.nome)
+    rprint(table)
+    if len(results) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(results)})[/dim]")
+
+
 # ── IBGE commands ──────────────────────────────────────────────────
 
 ibge_app = typer.Typer(help="IBGE economic indicators", no_args_is_help=True)
