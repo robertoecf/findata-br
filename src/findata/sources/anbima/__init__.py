@@ -23,6 +23,7 @@ from findata.sources.anbima.indices import (
     get_debentures,
     get_ettj,
     get_ima,
+    get_ima_history,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "get_debentures",
     "get_ettj",
     "get_ima",
+    "get_ima_history",
 ]
