@@ -10,7 +10,10 @@ from fastapi import APIRouter, Query
 from findata.sources.cvm import (
     companies,
     fca,
+    fidc,
+    fii,
     financials,
+    fip,
     funds,
     holdings,
     ipe,
@@ -240,6 +243,77 @@ async def fund_profile(
 ) -> list[profile.FundProfile]:
     """Investor profile breakdown (cotistas por tipo) for the given month."""
     return _page(await profile.get_fund_profile(year, month, cnpj), skip, limit)
+
+
+# ── FII — Fundos Imobiliários ────────────────────────────────────
+
+
+@router.get("/funds/fii/geral")
+async def fii_geral(
+    year: int = Query(..., ge=2016, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+    month: int | None = Query(default=None, ge=1, le=12),
+) -> list[fii.FIIGeneral]:
+    """FII cadastral facet — segmento, mandato, gestão, administrador."""
+    return await fii.get_fii_geral(year, cnpj=cnpj, month=month)
+
+
+@router.get("/funds/fii/complemento")
+async def fii_complemento(
+    year: int = Query(..., ge=2016, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+    month: int | None = Query(default=None, ge=1, le=12),
+) -> list[fii.FIIComplement]:
+    """FII complement facet — cotistas breakdown + PL + taxa administração."""
+    return await fii.get_fii_complemento(year, cnpj=cnpj, month=month)
+
+
+# ── FIDC — Fundos de Direitos Creditórios ────────────────────────
+
+
+@router.get("/funds/fidc/geral")
+async def fidc_geral(
+    year: int = Query(..., ge=2025, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+) -> list[fidc.FIDCGeneral]:
+    """FIDC cadastral facet (TAB I) — admin, classe, condomínio."""
+    return await fidc.get_fidc_geral(year, month, cnpj=cnpj)
+
+
+@router.get("/funds/fidc/pl")
+async def fidc_pl(
+    year: int = Query(..., ge=2025, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+) -> list[fidc.FIDCPatrimonio]:
+    """FIDC patrimônio líquido (TAB IV) — final + médio."""
+    return await fidc.get_fidc_pl(year, month, cnpj=cnpj)
+
+
+@router.get("/funds/fidc/direitos-creditorios")
+async def fidc_direitos_creditorios(
+    year: int = Query(..., ge=2025, le=_CURRENT_YEAR + 1),
+    month: int = Query(..., ge=1, le=12),
+    cnpj: str | None = Query(default=None),
+) -> list[fidc.FIDCDireitosCreditorios]:
+    """FIDC direitos creditórios (TAB VII) — com / sem risco + vencidos."""
+    return await fidc.get_fidc_direitos_creditorios(year, month, cnpj=cnpj)
+
+
+# ── FIP — Fundos de Investimento em Participações ────────────────
+
+
+@router.get("/funds/fip")
+async def fip_informe(
+    year: int = Query(..., ge=2010, le=_CURRENT_YEAR + 1),
+    cnpj: str | None = Query(default=None),
+    quarter: int | None = Query(default=None, ge=1, le=4),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=500, ge=1, le=5000),
+) -> list[fip.FIPInforme]:
+    """FIP informe trimestral — capital, cotistas breakdown, classe."""
+    return _page(await fip.get_fip(year, cnpj=cnpj, quarter=quarter), skip, limit)
 
 
 # ── Period discovery ─────────────────────────────────────────────

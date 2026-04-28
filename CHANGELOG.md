@@ -6,6 +6,62 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — Sprint 2: especialised investment funds (FII / FIDC / FIP)
+
+Three CVM products that the regular FI catalog (`funds.py`) doesn't
+cover, each with its own publication path, cadence, and shape:
+
+- **`get_fii_geral / complemento(year, cnpj=None, month=None)`** —
+  Fundos de Investimento Imobiliário. Annual ZIP with three CSVs
+  (`geral`, `complemento`, `ativo_passivo`); we ship the first two:
+  cadastral facet (segmento, mandato, gestão, administrador) and
+  complement facet (PL, valor patrimonial cota, cotistas breakdown by
+  type — PF / PJ não-financ / banco / EAPC / EFPC / RPPS / etc.).
+- **`get_fidc_geral / pl / direitos_creditorios(year, month, cnpj=None)`** —
+  Fundos de Investimento em Direitos Creditórios. Monthly ZIP fans into
+  twelve schedule-CSVs (TAB_I through TAB_X); we expose the three
+  highest-density: TAB_I (cadastral), TAB_IV (PL final + médio), TAB_VII
+  (direitos creditórios com / sem risco + vencidos a adquirir).
+- **`get_fip(year, cnpj=None, quarter=None, include_raw=False)`** —
+  Fundos de Investimento em Participações. Annual single CSV (no zip
+  wrapper) with one row per fund per quarter and 54 columns covering
+  capital subscription / integralization, cotistas breakdown, classe de
+  cotas, direitos políticos / econômicos. `include_raw=True` carries
+  the full row for callers that need the long tail.
+
+### Added — REST routes (Sprint 2)
+
+- `/cvm/funds/fii/{geral,complemento}`
+- `/cvm/funds/fidc/{geral,pl,direitos-creditorios}`
+- `/cvm/funds/fip`
+
+### Added — CLI (Sprint 2)
+
+- `findata cvm fii <CNPJ> -y YYYY [-m MM]` — segmento/mandato/PL/cotistas
+- `findata cvm fidc <CNPJ> -y YYYY -m MM` — classe/PL/direitos creditórios
+- `findata cvm fip <CNPJ> -y YYYY [-q Q]` — capital, cotistas, classe
+
+### Tests
+
+- `tests/test_cvm_fii_fidc_fip.py` — 9 respx-mocked tests covering FII
+  filter matrix, FIDC TAB_I/IV/VII parsing (Brazilian decimals, ISO-8859-1
+  encoding), FIP filter + quarter + raw-row preservation.
+- 87 unit tests pass total (was 78). ruff + ruff-format + mypy --strict clean.
+
+### Live smoke (Sprint 2)
+
+- FII PÁTRIA LOG (`11.728.688/0001-47`) 2026-02: PL R$ 7.0B, 544k cotistas,
+  segmento Multicategoria, gestão Ativa.
+- FIDC fevereiro 2026: 3,736 fundos cadastrados.
+- FIP Q4 2023: 2,068 informes trimestrais.
+
+### Defensive
+
+- FIP `_safe_raw()` filters `None` keys from `csv.DictReader` output —
+  pydantic would otherwise reject malformed rows where the data has more
+  delimiters than the header (real CVM data sometimes has trailing empty
+  fields).
+
 ### Added — Sprint 1: event streams + B3 official history
 
 Four new high-density public sources, wiring listed-company filings,
