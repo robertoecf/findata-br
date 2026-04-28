@@ -6,6 +6,72 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — Sprint 4: ANEEL energy auctions + SUSEP supervised entities
+
+Two new sources rounding out the public-data catalog with energy and
+insurance:
+
+- **`get_aneel_leiloes_geracao(year=, fonte=, uf=)`** — every winning
+  generation-auction bid since 2005 (A-3 / A-5 / A-6 / LFA / LEN, plus
+  energia nova, energia existente, etc.). 26 columns including
+  potência instalada (MW), garantia física, preço-teto / preço-leilão
+  (R$/MWh), deságio, investimento previsto, duração do contrato, UF e
+  empresa vencedora. Source: ANEEL CKAN (resource UUID stable).
+- **`get_aneel_leiloes_transmissao(year=, uf=)`** — every winning
+  transmission-line lot since 1999, with extensão (km), MVA das
+  subestações, RAP de edital × RAP do vencedor, deságio (%), prazo de
+  construção (meses), UF, empresa vencedora.
+- **`get_susep_empresas / search_susep_empresa`** — canonical SUSEP
+  roster of every supervised entity (insurance, previdência, capitalização,
+  resseguro). Three columns: CodigoFIP, NomeEntidade, CNPJ. Useful as
+  a code → CNPJ resolver and to filter joint-product feeds. Source:
+  ``www2.susep.gov.br/menuestatistica/ses/download/LISTAEMPRESAS.csv``.
+
+### Changed — http_client.py uses OS trust store
+
+- `findata.http_client` now configures httpx with a ``truststore``-
+  backed SSL context when available (added as a core dep, ``>=0.10``),
+  falling back to ``ssl.create_default_context()`` otherwise. This
+  fixes ``CERTIFICATE_VERIFY_FAILED`` on Brazilian government sites
+  signed under the ICP-Brasil chain (SUSEP being the trigger), which
+  isn't in certifi's bundle but is in macOS Keychain / WSL CA store.
+
+### Added — REST routes (Sprint 4)
+
+- ``/aneel/leiloes/{geracao,transmissao}``
+- ``/susep/empresas``, ``/susep/empresas/search``
+
+### Added — CLI (Sprint 4)
+
+- ``findata aneel leiloes [--tipo geracao|transmissao] [-y YYYY] [-f FONTE] [--uf UF]``
+- ``findata susep search <query>``
+
+### Tests
+
+- ``tests/test_aneel_leiloes.py`` — 6 respx-mocked tests covering
+  Brazilian-decimal parsing, year / fonte / uf filters, RAP +
+  extensão parsing, transmissão filter combinations.
+- ``tests/test_susep_empresas.py`` — 3 respx-mocked tests covering
+  malformed-row skip, case-insensitive name search, and short-query
+  refusal.
+- 114 unit tests pass total (was 105). ruff + ruff-format + mypy
+  --strict clean.
+
+### Live smoke (Sprint 4)
+
+- ANEEL eólicas: 801 winning empreendimentos (Baraúnas XV: 49 MW,
+  R$ 175/MWh; AW São João: 25 MW, R$ 178/MWh).
+- ANEEL transmissão 2024: 18 lotes (Teresina IV - Graça Aranha:
+  RAP/ano R$ 112.5M).
+- SUSEP empresas: 233 entidades; ``search('porto seguro')`` → 3
+  matches (Seguros Gerais, Vida e Previdência, Capitalização).
+
+### Defensive
+
+- ``empresas.py`` strips a leading blank line that the live SUSEP CSV
+  ships with — without it, ``csv.DictReader`` interprets the empty
+  first row as the header and returns 0 records.
+
 ### Added — Sprint 3: public-finance accounting + federal-tax revenue
 
 Two new sources connecting findata-br to Brazil's public-sector
