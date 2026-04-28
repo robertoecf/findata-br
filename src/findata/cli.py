@@ -534,6 +534,71 @@ def susep_search(
         rprint(f"[dim](showing {max_shown} of {len(results)})[/dim]")
 
 
+# ── Registry commands (cross-source CNPJ resolver) ─────────────────
+
+registry_app = typer.Typer(
+    help="Registry — cross-source CNPJ / ticker / name resolver",
+    no_args_is_help=True,
+)
+app.add_typer(registry_app, name="registry")
+
+
+@registry_app.command("lookup")
+def registry_lookup(
+    query: str = typer.Argument(
+        help="CNPJ (with or without mask), B3 ticker, CVM code, FIP code, or name"
+    ),
+    limit: int = typer.Option(20, "--limit", "-n", min=1, max=100),
+) -> None:
+    """Resolve a CNPJ-, ticker-, or name-shaped query against the embedded registry.
+
+    Examples:
+
+        findata registry lookup 33000167000101
+        findata registry lookup PETR4
+        findata registry lookup "porto seguro"
+        findata registry lookup "33.000.167/0001-01"
+    """
+    from findata.registry import lookup
+
+    result = _run(lookup(query, limit=limit))
+    if result.total == 0:
+        rprint(
+            "[yellow]No entities matched.[/yellow] "
+            "Try a name fragment, a B3 ticker (PETR4), or a clean 14-digit CNPJ."
+        )
+        return
+    table = Table(title=f"Registry hits for '{query}' ({result.total} of ≤{limit})")
+    table.add_column("Rank", style="dim", justify="right")
+    table.add_column("Kind", style="cyan")
+    table.add_column("CNPJ", style="green")
+    table.add_column("Nome")
+    table.add_column("Tickers", style="magenta")
+    for e in result.entities:
+        rank_str = f"{e.rank:.2f}" if e.rank is not None else "-"
+        tickers = ", ".join(e.tickers) if e.tickers else "-"
+        table.add_row(rank_str, e.kind, e.cnpj or "-", e.nome[:60], tickers)
+    rprint(table)
+    rprint(
+        "[dim]rank: more negative = more confident match. "
+        "< -5 ≈ exact CNPJ/ticker/code; > -2 ≈ fuzzy name.[/dim]"
+    )
+
+
+@registry_app.command("meta")
+def registry_meta_cmd() -> None:
+    """Show build metadata of the embedded registry."""
+    from findata.registry import get_meta
+
+    meta = _run(get_meta())
+    table = Table(title="Registry metadata")
+    table.add_column("Key", style="cyan")
+    table.add_column("Value")
+    for k, v in meta.items():
+        table.add_row(k, v)
+    rprint(table)
+
+
 # ── IBGE commands ──────────────────────────────────────────────────
 
 ibge_app = typer.Typer(help="IBGE economic indicators", no_args_is_help=True)
