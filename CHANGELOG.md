@@ -6,6 +6,68 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added — Sprint 3: public-finance accounting + federal-tax revenue
+
+Two new sources connecting findata-br to Brazil's public-sector
+accounting + federal-tax flows:
+
+- **`get_rreo / get_rgf / get_entes`** — Tesouro SICONFI API, the
+  Tesouro Nacional's datalake for the bimonthly RREO (Relatório
+  Resumido de Execução Orçamentária) and quadrimestral RGF (Relatório
+  de Gestão Fiscal) reports filed by every federal, state, and
+  municipal entity in Brazil under the LRF. REST + JSON, public,
+  cached pagination handled transparently (5000-row pages, walks until
+  ``hasMore=false``). 5,598 entities live (União + 26 UFs + DF + 5,570
+  municipalities). Filters: ``cod_ibge``, ``co_anexo``, ``co_poder``
+  for RGF.
+- **`get_arrecadacao(year=, month=, uf=, tributo=)`** — Receita
+  Federal monthly tax revenue by UF. Single CSV at
+  ``gov.br/receitafederal/dados/arrecadacao-estado.csv`` with ~45 tax
+  categories (IRPF, IRPJ, IRRF, COFINS, PIS, CSLL, IPI sub-categories,
+  IOF, CIDE, CPSSS, etc.) since 2000. Surfaced as long-form (one row
+  per period × UF × tributo) so callers can pivot without committing
+  to today's column shape (Receita has renamed columns over time).
+
+### Added — REST routes (Sprint 3)
+
+- ``/tesouro/siconfi/{rreo,rgf,entes}``
+- ``/receita/arrecadacao``, ``/receita/tributos``
+
+### Added — CLI (Sprint 3)
+
+- ``findata tesouro rreo <COD_IBGE> -y YYYY -b BIMESTRE [-a ANEXO]``
+- ``findata tesouro entes [--uf SP]``
+- ``findata receita arrecadacao -y YYYY [-m MM] [--uf SP] [-t IRPF]``
+
+### Tests
+
+- ``tests/test_tesouro_siconfi.py`` — 6 respx-mocked tests covering
+  RREO/RGF parsing, **pagination follow-up** when ``hasMore=true``,
+  ``co_anexo`` / ``co_poder`` query-param passthrough, empty payload,
+  defensive ``cod_ibge``-missing skip on entes.
+- ``tests/test_receita_arrecadacao.py`` — 6 respx-mocked tests
+  covering long-form expansion, UF + tributo + year/month filters,
+  empty-cell tolerance, malformed-month skip, and the **trailing
+  empty-column header drop** (Receita's CSV ends every line with ``;``,
+  yielding an empty-name "column" that csv.DictReader picks up — we
+  filter it out so it doesn't pollute ``list_tributos``).
+- 101 unit tests pass (was 89, +12). ruff + ruff-format + mypy --strict
+  clean.
+
+### Live smoke (Sprint 3)
+
+- União 2024-B6 RREO Anexo 06: 6,962 registros (receitas R$ 3.6T
+  previsão inicial / R$ 692B no bimestre).
+- SICONFI entes: 5,598 total (União + 26 UFs + DF + 5,570 munis).
+- Receita SP 2024-01 IRPF: R$ 1,160,717,531.
+
+### Deferred to Sprint 4
+
+- **SUSEP** open data — site uses ``.aspx`` pages with dropdown-driven
+  downloads; needs more reverse-engineering than this sprint's budget.
+- **ANEEL** — ``dadosabertos.aneel.gov.br`` returned TLS connection-reset
+  during scoping; will retry under the next sprint.
+
 ### Added — Sprint 2: especialised investment funds (FII / FIDC / FIP)
 
 Three CVM products that the regular FI catalog (`funds.py`) doesn't

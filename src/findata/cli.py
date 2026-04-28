@@ -350,6 +350,93 @@ def tesouro_history(
     rprint(table)
 
 
+@tesouro_app.command("rreo")
+def tesouro_rreo(
+    cod_ibge: int = typer.Argument(help="IBGE code (1=União, see siconfi.entes)"),
+    year: int = typer.Option(..., "--year", "-y"),
+    bimestre: int = typer.Option(..., "--bimestre", "-b", min=1, max=6),
+    anexo: str | None = typer.Option(None, "--anexo", "-a"),
+) -> None:
+    """RREO — Relatório Resumido de Execução Orçamentária."""
+    from findata.sources.tesouro import get_rreo
+
+    rows = _run(get_rreo(year, bimestre, cod_ibge, anexo=anexo))
+    if not rows:
+        rprint(f"[yellow]No RREO for IBGE={cod_ibge} {year}/B{bimestre}.[/yellow]")
+        return
+    table = Table(title=f"RREO {rows[0].instituicao} {year}/B{bimestre}")
+    table.add_column("Anexo", style="cyan")
+    table.add_column("Conta")
+    table.add_column("Coluna", style="dim")
+    table.add_column("Valor R$", justify="right")
+    max_shown = 80
+    for r in rows[:max_shown]:
+        valor = f"{r.valor:,.0f}" if r.valor is not None else "-"
+        table.add_row(r.anexo, r.conta[:50], r.coluna, valor)
+    rprint(table)
+    if len(rows) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(rows)} rows — use --anexo to slice)[/dim]")
+
+
+@tesouro_app.command("entes")
+def tesouro_entes(
+    uf: str | None = typer.Option(None, "--uf"),
+) -> None:
+    """List SICONFI federation entities (filter by UF optional)."""
+    from findata.sources.tesouro import get_entes
+
+    entes = _run(get_entes())
+    if uf:
+        entes = [e for e in entes if e.uf == uf.upper()]
+    table = Table(title=f"SICONFI entities ({len(entes)})")
+    table.add_column("IBGE", style="cyan", justify="right")
+    table.add_column("UF")
+    table.add_column("Esfera", style="dim")
+    table.add_column("Instituição")
+    table.add_column("População", justify="right")
+    max_shown = 60
+    for e in entes[:max_shown]:
+        pop = f"{e.populacao:,}" if e.populacao else "-"
+        table.add_row(str(e.cod_ibge), e.uf, e.esfera, e.instituicao[:50], pop)
+    rprint(table)
+    if len(entes) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(entes)} — filter with --uf)[/dim]")
+
+
+# ── Receita commands ──────────────────────────────────────────────
+
+receita_app = typer.Typer(help="Receita Federal — federal-tax revenue", no_args_is_help=True)
+app.add_typer(receita_app, name="receita")
+
+
+@receita_app.command("arrecadacao")
+def receita_arrecadacao(
+    year: int = typer.Option(..., "--year", "-y"),
+    month: int | None = typer.Option(None, "--month", "-m", min=1, max=12),
+    uf: str | None = typer.Option(None, "--uf"),
+    tributo: str | None = typer.Option(None, "--tributo", "-t"),
+) -> None:
+    """Federal-tax revenue by year/month/UF/tributo."""
+    from findata.sources.receita import get_arrecadacao
+
+    rows = _run(get_arrecadacao(year=year, month=month, uf=uf, tributo=tributo))
+    if not rows:
+        rprint("[yellow]No data matched filter.[/yellow]")
+        return
+    table = Table(title=f"Receita arrecadação {year}{'-' + str(month).zfill(2) if month else ''}")
+    table.add_column("Ano-Mês", style="cyan")
+    table.add_column("UF")
+    table.add_column("Tributo")
+    table.add_column("Valor R$", justify="right", style="bold")
+    max_shown = 40
+    for r in rows[:max_shown]:
+        valor = f"{r.valor:,.0f}" if r.valor is not None else "-"
+        table.add_row(f"{r.ano}-{r.mes:02d}", r.uf, r.tributo[:50], valor)
+    rprint(table)
+    if len(rows) > max_shown:
+        rprint(f"[dim](showing {max_shown} of {len(rows)} — narrow with --tributo)[/dim]")
+
+
 # ── IBGE commands ──────────────────────────────────────────────────
 
 ibge_app = typer.Typer(help="IBGE economic indicators", no_args_is_help=True)

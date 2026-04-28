@@ -1,7 +1,12 @@
-"""Tesouro Nacional — Treasury bond data (Tesouro Direto).
+"""Tesouro Nacional — Treasury bonds + public-finance accounting (SICONFI).
 
-Source: Tesouro Transparente (tesourotransparente.gov.br)
-No auth required. CSV format.
+| Module       | Source                                       | Cadence     |
+|--------------|----------------------------------------------|-------------|
+| `bonds.py`   | Tesouro Direto historical CSV                | daily       |
+| `siconfi.py` | RREO (bimestral) + RGF (quadrimestral) API   | bi/quadrim. |
+
+Sources: ``tesourotransparente.gov.br`` and
+``apidatalake.tesouro.gov.br/ords/siconfi``. No auth required.
 """
 
 from findata.sources.tesouro.bonds import (
@@ -10,10 +15,22 @@ from findata.sources.tesouro.bonds import (
     get_treasury_bonds,
     search_bonds,
 )
+from findata.sources.tesouro.siconfi import (
+    SiconfiAccount,
+    SiconfiEntity,
+    get_entes,
+    get_rgf,
+    get_rreo,
+)
 
 __all__ = [
+    "SiconfiAccount",
+    "SiconfiEntity",
     "TreasuryBond",
     "get_bond_history",
+    "get_entes",
+    "get_rgf",
+    "get_rreo",
     "get_treasury_bonds",
     "search_bonds",
 ]

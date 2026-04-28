@@ -1,4 +1,4 @@
-"""Tesouro Direto API routes — Treasury bonds."""
+"""Tesouro Direto + SICONFI API routes — bonds + public-finance accounting."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ from datetime import date
 
 from fastapi import APIRouter, Query
 
-from findata.sources.tesouro import bonds
+from findata.sources.tesouro import bonds, siconfi
 
 router = APIRouter(prefix="/tesouro", tags=["Tesouro Direto"])
+
+_CURRENT_YEAR = date.today().year
 
 
 @router.get("/bonds")
@@ -38,3 +40,50 @@ async def bond_history(
 ) -> list[bonds.TreasuryBond]:
     """Get price/rate history for a specific bond."""
     return await bonds.get_bond_history(titulo, start, end)
+
+
+# ── SICONFI — RREO + RGF + entes ─────────────────────────────────
+
+
+@router.get("/siconfi/rreo")
+async def siconfi_rreo(
+    year: int = Query(..., ge=2013, le=_CURRENT_YEAR + 1),
+    bimestre: int = Query(..., ge=1, le=6, description="Bimestre 1-6"),
+    cod_ibge: int = Query(..., description="IBGE entity code (1=União, 27 UFs, ~5570 munis)"),
+    demonstrativo: str = Query(default="RREO", description="RREO / RREO Simplificado"),
+    anexo: str | None = Query(default=None, description='e.g. "RREO-Anexo 01"'),
+) -> list[siconfi.SiconfiAccount]:
+    """RREO — Relatório Resumido de Execução Orçamentária (bimestral)."""
+    return await siconfi.get_rreo(
+        year,
+        bimestre,
+        cod_ibge,
+        demonstrativo=demonstrativo,  # type: ignore[arg-type]
+        anexo=anexo,
+    )
+
+
+@router.get("/siconfi/rgf")
+async def siconfi_rgf(
+    year: int = Query(..., ge=2013, le=_CURRENT_YEAR + 1),
+    quadrimestre: int = Query(..., ge=1, le=3, description="Quadrimestre 1-3"),
+    cod_ibge: int = Query(..., description="IBGE entity code"),
+    poder: str = Query(default="E", description="E/L/J/M/D — power branch"),
+    demonstrativo: str = Query(default="RGF"),
+    anexo: str | None = Query(default=None),
+) -> list[siconfi.SiconfiAccount]:
+    """RGF — Relatório de Gestão Fiscal (quadrimestral, LRF)."""
+    return await siconfi.get_rgf(
+        year,
+        quadrimestre,
+        cod_ibge,
+        poder=poder,  # type: ignore[arg-type]
+        demonstrativo=demonstrativo,  # type: ignore[arg-type]
+        anexo=anexo,
+    )
+
+
+@router.get("/siconfi/entes")
+async def siconfi_entes() -> list[siconfi.SiconfiEntity]:
+    """Full federation-entity list with IBGE codes (cached 24h)."""
+    return await siconfi.get_entes()

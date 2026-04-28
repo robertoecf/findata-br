@@ -14,7 +14,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from findata import __version__ as _pkg_version
 from findata._limits import RateLimitExceeded, _rate_limit_exceeded_handler, limiter
-from findata.api.routers import anbima, b3, bcb, cvm, ibge, ipea, tesouro
+from findata.api.routers import anbima, b3, bcb, cvm, ibge, ipea, receita, tesouro
 from findata.http_client import MAX_CACHE_SIZE as _CACHE_MAX
 from findata.http_client import _cache as _http_cache
 from findata.http_client import close_client
@@ -88,6 +88,7 @@ app.include_router(ibge.router)
 app.include_router(ipea.router)
 app.include_router(b3.router)
 app.include_router(anbima.router)
+app.include_router(receita.router)
 
 
 # ── MCP Server (auto-generated from FastAPI endpoints) ─────────────
