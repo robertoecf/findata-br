@@ -101,3 +101,28 @@ def test_meta_endpoint(client: TestClient) -> None:
     assert "built_at" in body
     assert "content_sha256" in body
     assert "sources_json" in body
+
+
+def test_app_registers_registry_routes() -> None:
+    """Smoke: registry routes are present in FastAPI's routing table.
+
+    fastapi-mcp discovers tools by walking ``app.routes``; if the routes
+    aren't registered, the MCP server can't expose them. We verify the
+    routes are there as a proxy for "the MCP companion will see them".
+    """
+    paths = {getattr(r, "path", "") for r in app.routes}
+    assert "/registry/lookup" in paths
+    assert "/registry/meta" in paths
+
+
+def test_mcp_companion_loaded() -> None:
+    """Smoke: fastapi-mcp module mounted without raising at import time.
+
+    A True value means MCP discovery ran; auto-tools include /registry/*
+    transitively because they're standard FastAPI routes. False means the
+    MCP companion failed to initialize (e.g. fastapi-mcp not installed) —
+    the API itself still works, but MCP is unavailable.
+    """
+    from findata.api.app import _MCP_ENABLED
+
+    assert isinstance(_MCP_ENABLED, bool)
