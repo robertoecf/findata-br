@@ -123,6 +123,8 @@ max-statements = 50
 "src/findata/cli.py" = ["PLR0913"]
 # Banner uses rich + sys.stdout directly — not a print-statement debug.
 "src/findata/banner.py" = ["T201"]
+# Top-level scripts are operator tools — printing to stdout/stderr is the API.
+"scripts/**" = ["T201"]
 
 [tool.mypy]
 python_version = "3.11"
