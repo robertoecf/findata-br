@@ -40,6 +40,8 @@ dependencies = [
     # Use the OS trust store so Brazilian gov sites signed under the
     # ICP-Brasil chain (SUSEP, parts of Receita) verify out-of-the-box.
     "truststore>=0.10",
+    # Async SQLite — backs findata.registry. Pure Python, ~50KB.
+    "aiosqlite>=0.20",
 ]
 
 [project.optional-dependencies]

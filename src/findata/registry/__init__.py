@@ -7,6 +7,6 @@ fuzzy name searches — the BM25 rank tells you which kind you got.
 """
 
 from findata.registry.models import Entity, LookupResult
-from findata.registry.store import lookup, search
+from findata.registry.store import get_meta, lookup
 
-__all__ = ["Entity", "LookupResult", "lookup", "search"]
+__all__ = ["Entity", "LookupResult", "get_meta", "lookup"]
