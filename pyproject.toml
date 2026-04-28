@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "findata-br"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open-source Brazilian financial data API, MCP server, and CLI"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Roberto", email = "robertoecf@users.noreply.github.com" }]
-keywords = ["brazil", "brasil", "finance", "financas", "api", "mcp", "bcb", "cvm", "b3", "ibge", "tesouro", "ptax", "focus", "selic", "ipca"]
+keywords = ["brazil", "brasil", "finance", "financas", "api", "mcp", "bcb", "cvm", "b3", "ibge", "tesouro", "siconfi", "receita", "anbima", "aneel", "susep", "ptax", "focus", "selic", "ipca", "cotahist", "fii", "fidc", "fip", "ipea"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

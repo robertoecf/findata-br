@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-28
+
+Massive expansion of the public-data catalog across four sprints, each
+adversarially reviewed by an external LLM (`gpt-5.4 xhigh` via tmux):
+14 real bugs caught and fixed before release. Test count grew from 57
+to 117; REST routes from 35 to 73; fonts modeled from 6 to 10.
+
+### Sprint 1 — Event streams + B3 official history
+
+- CVM IPE — fatos relevantes / comunicados (event stream)
+- CVM FCA — formulário cadastral (B3-ticker → CNPJ resolver)
+- B3 COTAHIST — official daily-quotes time series since 1986
+- B3 indices — composição teórica (IBOV, IBrX, SMLL, IDIV, IFIX + 14 sectoriais)
+
+### Sprint 2 — Especialised investment funds
+
+- CVM FII — Fundos Imobiliários (geral + complemento)
+- CVM FIDC — Fundos de Direitos Creditórios (TAB I/IV/VII)
+- CVM FIP — Fundos de Investimento em Participações
+
+### Sprint 3 — Public-finance accounting + federal-tax revenue
+
+- Tesouro SICONFI — RREO/RGF/entes (5,598 entidades reportando)
+- Receita Federal — arrecadação por UF (45 tributos × meses since 2000)
+
+### Sprint 4 — Energy auctions + insurance entities
+
+- ANEEL leilões — geração + transmissão (auction prices since 1999)
+- SUSEP empresas — 233 supervised insurance/previdência entities
+- ICP-Brasil chain trust via `truststore` integration in shared http client
+
 ### Added — Sprint 4: ANEEL energy auctions + SUSEP supervised entities
 
 Two new sources rounding out the public-data catalog with energy and
