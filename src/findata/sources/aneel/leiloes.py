@@ -159,7 +159,10 @@ def _parse_transmissao(r: dict[str, str]) -> LeilaoTransmissao:
 
 async def _fetch_csv(url: str) -> list[dict[str, str]]:
     raw = await get_bytes(url, cache_ttl=86400)
-    return list(csv.DictReader(io.StringIO(raw.decode("iso-8859-1")), delimiter=";"))
+    # ANEEL's CSVs are Windows-generated and contain CP1252-only bytes
+    # (0x96 = en dash, 0x97 = em dash, etc.) that ISO-8859-1 maps to undefined
+    # control characters. Decoding as CP1252 keeps them as their printable forms.
+    return list(csv.DictReader(io.StringIO(raw.decode("cp1252")), delimiter=";"))
 
 
 async def get_aneel_leiloes_geracao(

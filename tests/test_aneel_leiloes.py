@@ -139,3 +139,35 @@ async def test_transmissao_filter_by_year_uf() -> None:
     rows = await get_aneel_leiloes_transmissao(year=2024, uf="DF")
     assert len(rows) == 1
     assert rows[0].nome_empreendimento == "LT Lago Azul - Brasília 500 kV"
+
+
+@respx.mock
+async def test_aneel_decodes_cp1252_endash_in_company_names() -> None:
+    """Regression — Codex found ANEEL CSVs contain CP1252 byte 0x96 (en-dash)
+    inside empresa_vencedora and nome_empreendimento. Decoding as iso-8859-1
+    used to leave it as a control char, corrupting comparison/dedup downstream.
+    """
+    # Build the CSV as bytes so we can put the literal CP1252 byte 0x96 in,
+    # which Unicode → CP1252 encoding wouldn't round-trip through.
+    head = (
+        "DatGeracaoConjuntoDados;AnoLeilao;DatLeilao;NumLeilao;DscNumeroLeilaoCCEE;"
+        "DscTipoLeilao;NomEmpreendimento;CodCEG;IdeNucleoCEG;SigTipoGeracao;"
+        "DscFonteEnergia;DscDetalhamentoFonteEnergia;MdaPotenciaInstaladaMW;"
+        "MdaGarantiaFisicaSEL;VlrEnergiaVendida;VlrPrecoTeto;VlrPrecoLeilao;"
+        "VlrDesagio;VlrInvestimentoPrevisto;MdaDuracaoContrato;SigUFPrincipal;"
+        "VlrCotacaoDolar;VlrPrecoTetoDolar;VlrPrecoDolar;VlrInvestimentoDolar;"
+        "DscEmpresaVencedora\n"
+        "2026-04-01;2010;2010-12-30;2010/3;LEN;A-5;Foo;UTE.AI.RS.000;000;UTE;"
+        "Carvão;Carvão Mineral;100,00;50,00;40,00;200,00;180,00;10,00;"
+        "1.000.000.000,00;25;RS;2,33;57,91;77,25;77.000.000,00;"
+    ).encode("cp1252")
+    tail = b"Companhia de Gera\xe7\xe3o T\xe9rmica de Energia El\xe9trica \x96 CGTEE\n"
+    respx.get(re.compile(re.escape(LEILOES_GERACAO_URL))).mock(
+        return_value=httpx.Response(200, content=head + tail)
+    )
+    rows = await get_aneel_leiloes_geracao()
+    assert len(rows) == 1
+    # Properly-decoded en-dash, not control char \x96.
+    assert "\x96" not in (rows[0].empresa_vencedora or "")
+    assert "–" in (rows[0].empresa_vencedora or "")
+    assert rows[0].empresa_vencedora == ("Companhia de Geração Térmica de Energia Elétrica – CGTEE")

@@ -32,9 +32,12 @@ class EmpresaSusep(BaseModel):
 async def get_susep_empresas() -> list[EmpresaSusep]:
     """Full list of SUSEP-supervised entities. Cached for 24h."""
     raw = await get_bytes(LISTAEMPRESAS_URL, cache_ttl=86400)
-    # The live SUSEP file ships with a leading blank line before the header
+    # SUSEP's CSV is Windows-generated and uses CP1252 (en-dash 0x96 in entity
+    # names like "ABGF – AGÊNCIA BRASILEIRA …"). ISO-8859-1 would map 0x96 to
+    # an undefined control char, corrupting comparison and search downstream.
+    # The live file also ships with a leading blank line before the header
     # — strip it so csv.DictReader uses CodigoFIP/NomeEntidade/CNPJ as keys.
-    text = raw.decode("iso-8859-1").lstrip()
+    text = raw.decode("cp1252").lstrip()
     reader = csv.DictReader(io.StringIO(text), delimiter=";")
     out: list[EmpresaSusep] = []
     for r in reader:
@@ -48,8 +51,12 @@ async def get_susep_empresas() -> list[EmpresaSusep]:
 
 
 async def search_susep_empresa(query: str) -> list[EmpresaSusep]:
-    """Substring search against the entity name (case-insensitive)."""
-    if len(query) < 2:  # noqa: PLR2004
+    """Substring search against the entity name (case-insensitive).
+
+    Strips surrounding whitespace so copy-paste input like ``" porto "``
+    behaves the same as ``"porto"``.
+    """
+    needle = query.strip().upper()
+    if len(needle) < 2:  # noqa: PLR2004
         return []
-    needle = query.upper()
     return [e for e in await get_susep_empresas() if needle in e.nome.upper()]
