@@ -23,6 +23,7 @@ from findata.api.routers import (
     ibge,
     ipea,
     receita,
+    registry,
     susep,
     tesouro,
 )
@@ -102,6 +103,7 @@ app.include_router(anbima.router)
 app.include_router(receita.router)
 app.include_router(aneel.router)
 app.include_router(susep.router)
+app.include_router(registry.router)
 
 
 # ── MCP Server (auto-generated from FastAPI endpoints) ─────────────
