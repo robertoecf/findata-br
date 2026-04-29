@@ -6,6 +6,52 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-04-29
+
+Patch release fixing 5 bugs caught in adversarial review of v0.3.0 by
+external LLM (`gpt-5.4 xhigh` via tmux). Four are real correctness /
+availability issues in the registry query path; the fifth is metadata
+hygiene in the BCB SGS catalog.
+
+### Fixed
+
+- **DoS via FTS5 reserved words** in `/registry/lookup`. `q=OR` (also
+  `AND`, `NOT`, `NEAR`) raised `sqlite3.OperationalError: fts5: syntax
+  error near "OR"` and surfaced as **500 Internal Server Error** to any
+  caller. `_normalize_query` now phrase-quotes reserved tokens so they
+  go to FTS5 as literals, never operators.
+- **FTS5 syntax injection** in `/registry/lookup`. User-supplied
+  operators (`q=PETR4 NOT VALE3`) used to alter query semantics and
+  return attacker-controlled results. Now neutralized via the same
+  phrase-quoting pass.
+- **Prefix / fragment search did not work** despite the contract in
+  `routers/registry.py` and the docstring in `registry/__init__.py`
+  promising "company-name fragment" / "prefix searches". `q=PETROBR`
+  returned 0 hits. Fix: every non-reserved token now gets a `*` suffix
+  for FTS5 prefix matching. `q=PETROBR` correctly resolves to PETROBRAS.
+- **Labeled identifiers stopped resolving**. `q="CNPJ: 33.000.167/0001-01"`,
+  `q="FIP 05886"`, `q="CVM 9512"` all returned 0 because the alpha label
+  contaminated the joined-form variant (`CNPJ33000167000101` doesn't
+  exist as a token). Fix: third query variant — digits-only-joined —
+  rescues these inputs.
+- **`cdb` SGS series flagged as historical-only**. `code=3946` ("Taxa
+  média de CDB pré-fixado") was discontinued by BCB in 2012-12; the
+  catalog now documents this in the entry name and a comment so users
+  who pick `findata bcb get cdb` aren't surprised by ancient data.
+
+### Added
+
+- 9 regression tests covering each of the 4 fixed query-path bugs:
+  reserved-word safety (4 tokens × asserts), prefix matching, labeled
+  CNPJ resolution, FTS injection neutralization. 168 → **176 tests**.
+
+### Internal
+
+- `_FTS5_RESERVED` constant lists FTS5 operators we have to escape.
+- New helper `_escape_token(t)` centralizes quote-or-prefix logic;
+  `_normalize_query` now produces up to 3 OR'd variants (spaced /
+  joined / digits-only-joined) for maximum input forgiveness.
+
 ## [0.3.0] — 2026-04-28
 
 Cross-source CNPJ resolver — embedded SQLite registry shipped inside the

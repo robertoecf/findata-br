@@ -50,8 +50,13 @@ SERIES_CATALOG: dict[str, dict[str, Any]] = {
         "freq": "mensal",
     },
     "cdb": {
+        # NOTE: série legada — última observação publicada em 2012-12. BCB
+        # descontinuou o "Taxa média de CDB pré-fixado" e nunca substituiu
+        # por outra série pública. Mantida no catálogo para acesso ao
+        # histórico (1995-2012); para taxas de CDB atuais, consumidores
+        # precisam recorrer a publicações comerciais (ANBIMA, B3).
         "code": 3946,
-        "name": "Taxa média de CDB pré-fixado",
+        "name": "Taxa média de CDB pré-fixado (histórico, descontinuado em 2012)",
         "unit": "% a.a.",
         "freq": "mensal",
     },
