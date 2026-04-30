@@ -1020,25 +1020,7 @@ def browser_summary(urls: list[str], base_url: str) -> dict[str, int]:
 def infer_findata_mapping(base_url: str, sitemap_counts: dict[str, int]) -> list[dict[str, object]]:
     if "dadosdemercado.com.br" in urllib.parse.urlparse(base_url).netloc:
         return [
-            {
-                "surface": "/acoes",
-                "findata_routes": [
-                    "/b3/cotahist/day/{year}/{month}/{day}",
-                    "/cvm/companies/fca/securities",
-                    "/registry/lookup",
-                ],
-                "status": "covered_needs_product_view",
-            },
-            {
-                "surface": "/indices",
-                "findata_routes": ["/b3/indices", "/b3/indices/{symbol}"],
-                "status": "composition_covered_values_need_audit",
-            },
-            {
-                "surface": "/agenda-de-dividendos",
-                "findata_routes": [],
-                "status": "gap_b3_corporate_events",
-            },
+            *DEFAULT_FINDATA_MAPPING,
             {
                 "surface": "/boletim-focus",
                 "findata_routes": ["/bcb/focus/annual", "/bcb/focus/monthly", "/bcb/focus/selic"],
@@ -1064,9 +1046,9 @@ def consulted_at_iso() -> str:
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     base_url = args.base_url.rstrip("/")
     robots_result = fetch_text(urllib.parse.urljoin(base_url, "/robots.txt"))
-    robots = parse_robots(robots_result.body)
-    sitemap_result = fetch_text(urllib.parse.urljoin(base_url, "/sitemap.xml"))
     robots_available = robots_result.status == HTTP_OK
+    robots = parse_robots(robots_result.body) if robots_available else RobotsRules([])
+    sitemap_result = fetch_text(urllib.parse.urljoin(base_url, "/sitemap.xml"))
     sitemap_urls, nested_sitemaps = (
         collect_sitemap_urls(sitemap_result, base_url, robots, args.sleep)
         if robots_available
@@ -1143,7 +1125,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             "url": robots_result.url,
             "status": robots_result.status,
             "available": robots_available,
-            "disallow": robots.disallow,
+            "disallow": robots.disallow if robots_available else [],
             "error": robots_result.error,
         },
         "sitemap": {

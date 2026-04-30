@@ -220,7 +220,23 @@ def test_build_payload_skips_passive_fetches_when_robots_is_unavailable(monkeypa
     )
 
     assert payload["robots"]["available"] is False
+    assert payload["robots"]["disallow"] == []
     assert payload["inspected_pages"] == []
     assert payload["static_assets_fetched"] == []
     assert payload["browser_network"]["enabled"] is False
     assert payload["referenced_urls"]["same_origin_blocked_by_robots"] == []
+
+
+def test_dadosdemercado_mapping_extends_default_surfaces() -> None:
+    mapping = benchmark.infer_findata_mapping("https://www.dadosdemercado.com.br", {})
+    surfaces = {item["surface"]: item for item in mapping}
+
+    assert "/fundos" in surfaces
+    assert "/tesouro-direto" in surfaces
+    assert "/calendario-dividendos" in surfaces
+    assert "/agenda-de-dividendos" not in surfaces
+    assert surfaces["/boletim-focus"]["findata_routes"] == [
+        "/bcb/focus/annual",
+        "/bcb/focus/monthly",
+        "/bcb/focus/selic",
+    ]
