@@ -93,6 +93,39 @@ def test_parse_robots_uses_robotparser_allow_rules_and_specific_agent() -> None:
     assert not robots.blocks(f"{base}/api/search", base)
 
 
+def test_parse_robots_keeps_group_across_blank_lines() -> None:
+    robots = benchmark.parse_robots(
+        """
+        User-agent: *
+        Disallow: /api/
+
+        Allow: /api/public
+        """
+    )
+
+    base = "https://www.dadosdemercado.com.br"
+
+    assert robots.blocks(f"{base}/api/private", base)
+    assert not robots.blocks(f"{base}/api/public", base)
+
+
+def test_parse_robots_matches_against_product_token_only() -> None:
+    robots = benchmark.parse_robots(
+        """
+        User-agent: *
+        Allow: /
+
+        User-agent: github.com
+        Disallow: /
+        """
+    )
+
+    assert not robots.blocks(
+        "https://www.dadosdemercado.com.br/fundos",
+        "https://www.dadosdemercado.com.br",
+    )
+
+
 def test_collect_sitemap_urls_expands_sitemap_indexes(monkeypatch: Any) -> None:
     root = benchmark.FetchResult(
         url="https://example.com/sitemap.xml",

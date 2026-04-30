@@ -325,9 +325,6 @@ def parse_robots_groups(body: str) -> list[RobotsGroup]:
     for raw_line in body.splitlines():
         line = raw_line.split("#", 1)[0].strip()
         if not line:
-            agents, directives, seen_directive = flush_robots_group(
-                groups, agents, directives
-            )
             continue
         if ":" not in line:
             continue
@@ -387,7 +384,13 @@ def matching_robots_directives(
 def agent_specificity(agent: str, user_agent: str) -> int:
     if agent == "*":
         return 0
-    return len(agent) if agent in user_agent.lower() else -1
+    product_token = user_agent_product_token(user_agent)
+    return len(agent) if agent in product_token else -1
+
+
+def user_agent_product_token(user_agent: str) -> str:
+    token = user_agent.strip().split(maxsplit=1)[0]
+    return token.split("/", 1)[0].lower()
 
 
 def robots_pattern_matches(pattern: str, path: str) -> bool:
