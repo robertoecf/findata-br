@@ -41,6 +41,100 @@ def test_fetch_text_records_http_error_status_and_body(monkeypatch: Any) -> None
     assert "HTTPError" in str(result.error)
 
 
+def test_normalize_url_accepts_page_relative_references() -> None:
+    base = "https://www.dadosdemercado.com.br/acoes/petr4"
+
+    assert benchmark.normalize_url("next/data.json", base) == (
+        "https://www.dadosdemercado.com.br/acoes/next/data.json"
+    )
+    assert benchmark.normalize_url("./api/data", base) == (
+        "https://www.dadosdemercado.com.br/acoes/api/data"
+    )
+    assert benchmark.normalize_url("?page=2", base) == (
+        "https://www.dadosdemercado.com.br/acoes/petr4?page=2"
+    )
+
+
+def test_html_extraction_keeps_relative_links_without_meta_content_noise() -> None:
+    result = benchmark.FetchResult(
+        url="https://example.com/base/page",
+        status=200,
+        content_type="text/html",
+        body=(
+            '<meta name="viewport" content="width=device-width">'
+            '<meta property="og:image" content="/card.png">'
+            '<a href="next/data.json">data</a>'
+        ),
+    )
+
+    assert benchmark.extract_html_urls(result, "https://example.com") == [
+        "https://example.com/base/next/data.json",
+        "https://example.com/card.png",
+    ]
+
+
+def test_parse_robots_uses_robotparser_allow_rules_and_specific_agent() -> None:
+    robots = benchmark.parse_robots(
+        """
+        User-agent: *
+        Disallow: /api/
+        Allow: /api/docs
+
+        User-agent: findata-br-public-benchmark
+        Disallow: /private/
+        Allow: /private/public
+        """
+    )
+
+    base = "https://www.dadosdemercado.com.br"
+
+    assert robots.blocks(f"{base}/private/data", base)
+    assert not robots.blocks(f"{base}/private/public", base)
+    assert not robots.blocks(f"{base}/api/search", base)
+
+
+def test_collect_sitemap_urls_expands_sitemap_indexes(monkeypatch: Any) -> None:
+    root = benchmark.FetchResult(
+        url="https://example.com/sitemap.xml",
+        status=200,
+        content_type="application/xml",
+        body=(
+            "<sitemapindex>"
+            "<sitemap><loc>https://example.com/sitemap-pages.xml</loc></sitemap>"
+            "</sitemapindex>"
+        ),
+    )
+
+    def fake_fetch_text(url: str, timeout: int = 20) -> object:
+        assert url == "https://example.com/sitemap-pages.xml"
+        return benchmark.FetchResult(
+            url=url,
+            status=200,
+            content_type="application/xml",
+            body=(
+                "<urlset>"
+                "<url><loc>https://example.com/acoes/petr4</loc></url>"
+                "<url><loc>https://example.com/indices/ibov</loc></url>"
+                "</urlset>"
+            ),
+        )
+
+    monkeypatch.setattr(benchmark, "fetch_text", fake_fetch_text)
+
+    urls, nested = benchmark.collect_sitemap_urls(
+        root,
+        "https://example.com",
+        benchmark.parse_robots("User-agent: *\nAllow: /\n"),
+        sleep_seconds=0.0,
+    )
+
+    assert urls == [
+        "https://example.com/acoes/petr4",
+        "https://example.com/indices/ibov",
+    ]
+    assert [item.url for item in nested] == ["https://example.com/sitemap-pages.xml"]
+
+
 def test_collect_authorized_targets_uses_configured_prefixes_only() -> None:
     targets = benchmark.collect_authorized_targets(
         [

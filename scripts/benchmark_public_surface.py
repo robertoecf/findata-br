@@ -32,6 +32,7 @@ USER_AGENT = "findata-br-public-benchmark/0.2 (+https://github.com/robertoecf/fi
 HTTP_OK = 200
 DEFAULT_API_MAX_BYTES = 256 * 1024
 MAX_JSON_SHAPE_DEPTH = 3
+DEFAULT_MAX_SITEMAPS = 50
 DEFAULT_PROBE_PATH_PREFIXES = ["/api/", "/_next/data/"]
 CORE_PATHS = [
     "/",
@@ -154,6 +155,22 @@ class LimitedFetch:
     error: str | None = None
 
 
+@dataclass
+class RobotsDirective:
+    kind: str
+    pattern: str
+
+    @property
+    def specificity(self) -> int:
+        return len(self.pattern.rstrip("$").replace("*", ""))
+
+
+@dataclass
+class RobotsGroup:
+    agents: list[str]
+    directives: list[RobotsDirective]
+
+
 class LinkParser(html.parser.HTMLParser):
     """Small HTML URL extractor for public href/src/content attributes."""
 
@@ -164,20 +181,37 @@ class LinkParser(html.parser.HTMLParser):
 
     def handle_starttag(self, _tag: str, attrs: list[tuple[str, str | None]]) -> None:
         for name, value in attrs:
-            if value and name.lower() in {"href", "src", "content"}:
+            name_lower = name.lower()
+            if value and (
+                name_lower in {"href", "src"}
+                or (name_lower == "content" and is_likely_content_url(value))
+            ):
                 self.urls.add(value, self.base)
 
 
 class RobotsRules:
-    def __init__(self, disallow: list[str]) -> None:
+    def __init__(
+        self,
+        disallow: list[str],
+        groups: list[RobotsGroup] | None = None,
+    ) -> None:
         self.disallow = [rule for rule in disallow if rule]
+        self.groups = groups or [
+            RobotsGroup(
+                agents=["*"],
+                directives=[RobotsDirective("disallow", rule) for rule in self.disallow],
+            )
+        ]
 
     def blocks(self, url: str, base_url: str) -> bool:
         parsed = urllib.parse.urlparse(url)
         base_host = urllib.parse.urlparse(base_url).netloc
         if parsed.netloc and parsed.netloc != base_host:
             return False
-        return any(parsed.path.startswith(rule) for rule in self.disallow)
+        path = parsed.path or "/"
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+        return robots_path_blocked(path, self.groups, USER_AGENT)
 
 
 def fetch_text(url: str, timeout: int = 20) -> FetchResult:
@@ -263,33 +297,160 @@ def safe_headers(headers: dict[str, str]) -> dict[str, str]:
 
 
 def normalize_url(value: str, base: str) -> str | None:
-    if value.startswith(("mailto:", "tel:", "data:", "javascript:", "#")):
+    value = value.strip()
+    if not value or value.startswith(("mailto:", "tel:", "data:", "javascript:", "#")):
         return None
     if value.startswith("//"):
         value = "https:" + value
     parsed = urllib.parse.urlparse(value)
-    if not parsed.scheme and not value.startswith("/"):
+    if parsed.scheme and parsed.scheme not in {"http", "https"}:
         return None
     return urllib.parse.urljoin(base, value)
 
 
+def is_likely_content_url(value: str) -> bool:
+    stripped = value.strip()
+    return stripped.startswith(("http://", "https://", "//", "/", "./", "../", "?"))
+
+
 def parse_robots(body: str) -> RobotsRules:
+    return RobotsRules(collect_disallow_rules(body), parse_robots_groups(body))
+
+
+def parse_robots_groups(body: str) -> list[RobotsGroup]:
+    groups: list[RobotsGroup] = []
+    agents: list[str] = []
+    directives: list[RobotsDirective] = []
+    seen_directive = False
+    for raw_line in body.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            agents, directives, seen_directive = flush_robots_group(
+                groups, agents, directives
+            )
+            continue
+        if ":" not in line:
+            continue
+        key, value = [part.strip() for part in line.split(":", 1)]
+        key_lower = key.lower()
+        if key_lower == "user-agent":
+            if seen_directive:
+                agents, directives, seen_directive = flush_robots_group(
+                    groups, agents, directives
+                )
+            agents.append(value.lower())
+        elif key_lower in {"allow", "disallow"} and agents:
+            seen_directive = True
+            if value:
+                directives.append(RobotsDirective(key_lower, value))
+    flush_robots_group(groups, agents, directives)
+    return groups
+
+
+def flush_robots_group(
+    groups: list[RobotsGroup],
+    agents: list[str],
+    directives: list[RobotsDirective],
+) -> tuple[list[str], list[RobotsDirective], bool]:
+    if agents:
+        groups.append(RobotsGroup(agents=agents, directives=directives))
+    return [], [], False
+
+
+def robots_path_blocked(path: str, groups: list[RobotsGroup], user_agent: str) -> bool:
+    directives = matching_robots_directives(groups, user_agent)
+    matching = [rule for rule in directives if robots_pattern_matches(rule.pattern, path)]
+    if not matching:
+        return False
+    winner = max(matching, key=lambda rule: (rule.specificity, rule.kind == "allow"))
+    return winner.kind == "disallow"
+
+
+def matching_robots_directives(
+    groups: list[RobotsGroup], user_agent: str
+) -> list[RobotsDirective]:
+    best_specificity = -1
+    selected: list[RobotsDirective] = []
+    for group in groups:
+        specificity = max(
+            (agent_specificity(agent, user_agent) for agent in group.agents),
+            default=-1,
+        )
+        if specificity > best_specificity:
+            best_specificity = specificity
+            selected = group.directives.copy()
+        elif specificity == best_specificity:
+            selected.extend(group.directives)
+    return selected if best_specificity >= 0 else []
+
+
+def agent_specificity(agent: str, user_agent: str) -> int:
+    if agent == "*":
+        return 0
+    return len(agent) if agent in user_agent.lower() else -1
+
+
+def robots_pattern_matches(pattern: str, path: str) -> bool:
+    if not pattern:
+        return False
+    anchored = pattern.endswith("$")
+    body = pattern[:-1] if anchored else pattern
+    regex = re.escape(body).replace(r"\*", ".*")
+    if anchored:
+        regex = f"{regex}$"
+    return re.match(regex, path) is not None
+
+
+def collect_disallow_rules(body: str) -> list[str]:
     disallow: list[str] = []
-    active = False
     for raw_line in body.splitlines():
         line = raw_line.split("#", 1)[0].strip()
         if not line or ":" not in line:
             continue
         key, value = [part.strip() for part in line.split(":", 1)]
-        if key.lower() == "user-agent":
-            active = value in {"*", USER_AGENT}
-        elif active and key.lower() == "disallow":
+        if key.lower() == "disallow" and value and value not in disallow:
             disallow.append(value)
-    return RobotsRules(disallow)
+    return disallow
 
 
 def parse_sitemap(body: str) -> list[str]:
     return re.findall(r"<loc>(.*?)</loc>", body)
+
+
+def is_sitemap_index(body: str) -> bool:
+    return "<sitemapindex" in body.lower()
+
+
+def collect_sitemap_urls(
+    root_result: FetchResult,
+    base_url: str,
+    robots: RobotsRules,
+    sleep_seconds: float,
+    max_sitemaps: int = DEFAULT_MAX_SITEMAPS,
+) -> tuple[list[str], list[FetchResult]]:
+    root_locs = parse_sitemap(root_result.body)
+    if not is_sitemap_index(root_result.body):
+        return root_locs, []
+
+    page_urls: set[str] = set()
+    fetched_sitemaps: list[FetchResult] = []
+    seen = {root_result.url}
+    pending = root_locs[:max_sitemaps]
+    while pending and len(fetched_sitemaps) < max_sitemaps:
+        raw_url = pending.pop(0)
+        sitemap_url = normalize_url(raw_url, root_result.url or base_url)
+        if not sitemap_url or sitemap_url in seen or robots.blocks(sitemap_url, base_url):
+            continue
+        seen.add(sitemap_url)
+        time.sleep(sleep_seconds)
+        result = fetch_text(sitemap_url)
+        fetched_sitemaps.append(result)
+        locs = parse_sitemap(result.body)
+        if is_sitemap_index(result.body):
+            pending.extend(locs)
+        else:
+            page_urls.update(locs)
+    return sorted(page_urls), fetched_sitemaps
 
 
 def route_bucket(url: str, base_url: str) -> str:
@@ -582,7 +743,10 @@ def run_chrome(command: list[str], timeout_seconds: int) -> str:
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
+            if hasattr(os, "killpg"):
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
             process.wait(timeout=5)
         return "timeout_killed_after_capture"
 
@@ -673,6 +837,7 @@ def build_report(payload: dict[str, Any]) -> str:
     )
     for section, count in sitemap["by_section"].items():
         lines.append(f"| `{section}` | {count} |")
+    lines.extend(nested_sitemap_report_lines(sitemap))
     lines.extend(
         [
             "",
@@ -761,6 +926,13 @@ def robots_status_report_lines(robots: dict[str, object]) -> list[str]:
         f"Robots status: `{robots['status']}`. Passive page/static/browser "
         "inspection was skipped because robots policy could not be confirmed.",
     ]
+
+
+def nested_sitemap_report_lines(sitemap: dict[str, object]) -> list[str]:
+    nested_sitemaps = sitemap.get("nested_sitemaps", [])
+    if not nested_sitemaps:
+        return []
+    return ["", f"Nested sitemap files fetched: {len(nested_sitemaps)}"]
 
 
 def authorized_probe_report_lines(authorized_probe: dict[str, object]) -> list[str]:
@@ -883,13 +1055,21 @@ def infer_findata_mapping(base_url: str, sitemap_counts: dict[str, int]) -> list
     return mapped or DEFAULT_FINDATA_MAPPING
 
 
+def consulted_at_iso() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()  # noqa: UP017
+
+
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     base_url = args.base_url.rstrip("/")
     robots_result = fetch_text(urllib.parse.urljoin(base_url, "/robots.txt"))
     robots = parse_robots(robots_result.body)
     sitemap_result = fetch_text(urllib.parse.urljoin(base_url, "/sitemap.xml"))
-    sitemap_urls = parse_sitemap(sitemap_result.body)
     robots_available = robots_result.status == HTTP_OK
+    sitemap_urls, nested_sitemaps = (
+        collect_sitemap_urls(sitemap_result, base_url, robots, args.sleep)
+        if robots_available
+        else (parse_sitemap(sitemap_result.body), [])
+    )
     pages = inspect_pages(base_url, robots, args.sleep) if robots_available else []
     asset_results, asset_literals = (
         collect_static_assets(pages, base_url, robots, args.sleep)
@@ -940,7 +1120,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         }
     sitemap_counts = summarize_counts(sitemap_urls, base_url)
     return {
-        "consulted_at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+        "consulted_at": consulted_at_iso(),
         "base_url": base_url,
         "artifact_paths": {
             "json": args.output,
@@ -970,6 +1150,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             "url_count": len(sitemap_urls),
             "by_section": sitemap_counts,
             "urls": sitemap_urls,
+            "nested_sitemaps": [page_summary(sitemap) for sitemap in nested_sitemaps],
         },
         "inspected_pages": [page_summary(page) for page in pages],
         "static_assets_fetched": [page_summary(asset) for asset in asset_results],
