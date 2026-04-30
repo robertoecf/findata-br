@@ -135,6 +135,31 @@ def test_collect_sitemap_urls_expands_sitemap_indexes(monkeypatch: Any) -> None:
     assert [item.url for item in nested] == ["https://example.com/sitemap-pages.xml"]
 
 
+def test_parse_sitemap_accepts_prettified_loc_values() -> None:
+    assert benchmark.parse_sitemap(
+        """
+        <urlset>
+          <url>
+            <loc>
+              https://example.com/acoes/petr4
+            </loc>
+          </url>
+        </urlset>
+        """
+    ) == ["https://example.com/acoes/petr4"]
+
+
+def test_extract_url_literals_ignores_html_closing_tags() -> None:
+    assert benchmark.extract_url_literals(
+        """
+        <script>fetch('/api/public')</script>
+        <div>content</div>
+        </body>
+        """,
+        "https://example.com",
+    ) == ["https://example.com/api/public"]
+
+
 def test_collect_authorized_targets_uses_configured_prefixes_only() -> None:
     targets = benchmark.collect_authorized_targets(
         [

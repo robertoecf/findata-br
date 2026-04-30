@@ -414,7 +414,7 @@ def collect_disallow_rules(body: str) -> list[str]:
 
 
 def parse_sitemap(body: str) -> list[str]:
-    return re.findall(r"<loc>(.*?)</loc>", body)
+    return [match.strip() for match in re.findall(r"<loc>\s*(.*?)\s*</loc>", body, re.DOTALL)]
 
 
 def is_sitemap_index(body: str) -> bool:
@@ -479,6 +479,8 @@ def extract_html_urls(result: FetchResult, base_url: str) -> list[str]:
 def extract_url_literals(text: str, base_url: str) -> list[str]:
     candidates = UrlBucket()
     for match in re.finditer(r"https?://[^\s'\"\\)<>]+|/[A-Za-z0-9_./?=&:%~-]+", text):
+        if match.start() > 0 and text[match.start() - 1] == "<":
+            continue
         value = match.group(0).rstrip(".,;]")
         candidates.add(value, base_url)
     return candidates.sorted()
