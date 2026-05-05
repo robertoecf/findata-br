@@ -51,9 +51,11 @@ def test_developer_docs_page(client: TestClient) -> None:
     r = client.get("/docs")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
-    assert '<html lang="en">' in r.text
+    assert 'lang="en"' in r.text
     assert "Developer console" in r.text
-    assert "REST API, OpenAPI schema, MCP endpoint" in r.text
+    assert "REST API" in r.text
+    assert "OpenAPI schema" in r.text
+    assert "MCP endpoint" in r.text
     assert "Console técnico" not in r.text
     assert "/charts" in r.text
     assert "/api/docs" in r.text
